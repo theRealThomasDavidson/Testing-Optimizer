@@ -49,11 +49,13 @@ def main():
     """
     running = True
     print("Loading...")
-    exitPattern = re.compile("(exit|quit)\s*")                          #exit command
+    exitPattern = re.compile(r"(exit|quit)\s*")                          #exit command
     propPattern = re.compile(r"(?<=prop:)\s*\d*\.\d+\s*")                #find batch size based on proportion
     addPattern = re.compile(r"(?<=add pop:)\s*\d+\s+\d+\s*")             #add cases to population with positives first then negatives
-    cases = [1, 2]                                                      #cases with positives first then negatives our null is 50/50
-                                                                        #and becomes negligable after we have a lot of samples
+    popPattern = re.compile(r"population\s*")
+    batchPattern = re.compile(r"batch size\s*")
+    cases = [1, 2]                                                       #cases with positives first then totoal pop our null is 50/50
+                                                                         #and becomes negligable after we have a lot of samples
     print("Loading Done")
     while running:
         action = input("what action should we take? ")
@@ -77,6 +79,14 @@ def main():
             batchSizeOptimizer((cases[0]/cases[1]))
             continue
 
+        if popPattern.search(action.lower()):
+            print("Positive cases: \t{}\nTotal tests:       \t{}\nPositive percentage: \t{:.4f}%".format(cases[0], cases[1], 100. * cases[0]/cases[1]))
+            continue
+
+        if batchPattern.search(action.lower()):
+            batchSizeOptimizer((cases[0] / cases[1]))
+            continue
+              
 
 
 
