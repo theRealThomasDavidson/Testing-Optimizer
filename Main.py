@@ -20,10 +20,14 @@ def batchSizeOptimizer(prop):
     low, mid, high = 1, 1, 2
     bt = lambda x: batchtests(prop, x)
 
-    while bt(mid) >= bt(high):
+    while bt(mid) > bt(high) and bt(high) < 1:
+
         low = mid
         mid = high
         high *= 2
+    print(bt(mid), bt(high), mid, high)
+    if bt(mid) == 1.:
+        return 1, 1.
 
     l, m1, m2, h = low, int(low + ((high - low ) / 3)), int(low + (2*((high-low)/3))), high
 
