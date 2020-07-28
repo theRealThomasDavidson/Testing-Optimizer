@@ -1,0 +1,2 @@
+# don't keep python compiled files
+./__pycache__
