@@ -1,0 +1,60 @@
+\documentclass{article}
+
+\usepackage{tikz}
+\usetikzlibrary{calc}
+\usetikzlibrary{shapes.geometric}
+\tikzset{every picture/.style={line width=0.75pt}}
+
+\usepackage[margin=1cm]{geometry}
+\title{data flow}
+\author{MmKayUltra1}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\bigskip
+
+\tikzstyle{io} = [rectangle, rounded corners, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=blue!30]
+\tikzstyle{process} = [rectangle, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=orange!30]
+\tikzstyle{decision} = [diamond, aspect= 3, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=green!30]
+\tikzstyle{arrow} = [thick,->,>=stealth]
+\begin{tikzpicture}[node distance=2cm]
+\node (Case initial) [io] {New Sample with ID};
+\node (Hopper) [process, below of= Case initial]{Hold samples for Batches(get batch size)};
+\node (Batch) [io, below of= Hopper] {Batch Store (holds batches that hold sample numbers until the batch resolves)};
+
+\node (Test Batch) [decision, below of= Batch] {Test Batch};
+\node (Neg Batch) [process, below of = Test Batch, xshift=-4cm]{Send Data as Negative, Clear Batch Store};
+\node (Pos Batch) [process, below of = Test Batch, xshift=4cm]{Get Batch Data for individual Tests};
+
+\node (Individual Tests) [below of= Pos Batch, io, xshift=-3.2cm] {Individual Store (A list of all samples that will receive an individual test)};
+\node (Sample 2) [below of= Individual Tests, decision, xshift= -4.1cm] {Test Sample 1 from Batch};
+\node (Sample 1) [below of= Individual Tests, decision, xshift= 3.2cm] {Test Sample i from Batch};
+%\node (Sample n) [below of= Individual Tests, decision, xshift= 4.2cm] {Test Sample 2 from Batch};
+\node (Sample 1 Neg) [below of= Sample 1, process, xshift= 2cm] {Send Negative result, Clear from individual list};
+\node (Sample 1 Pos) [below of= Sample 1, process, xshift= -9cm] {Send Positive result, Clear from individual list};
+%\node (fizzle) [left of=atgoal, io, xshift=-10cm] {failure};
+\draw [arrow] (Case initial) -- node[anchor=east] {added one by one}  (Hopper);
+\draw [arrow] (Hopper) --node[anchor=east]{Generate batch number} (Batch);
+\draw [arrow] (Batch) -- (Test Batch);
+\draw [arrow] (Test Batch) --node[xshift = -.1cm]{Negative Result} (Neg Batch);
+\draw [arrow] (Test Batch) --node[xshift = .15cm]{Positive Result} (Pos Batch);
+\draw [arrow] (Neg Batch) --node[anchor=east]{remove batch} (-3.4cm,-4.5cm);
+\draw [arrow] (Pos Batch) --node[]{Recall Batch} (3.4cm,-4.5cm);
+
+\draw[arrow] (Batch) -|node[anchor=south]{after Batch Recall} (8.4cm,-8.2cm);
+\draw[arrow] (8.4cm,-8.2cm) |- (Individual Tests);
+\draw [arrow] (Individual Tests) -- (Sample 2);
+\draw [arrow] (Individual Tests) -- (Sample 1);
+%\draw [arrow] (Individual Tests) -- (Sample n);
+\draw [arrow] (Sample 1) -- node[anchor=east] {Positive} (Sample 1 Pos);
+\draw [arrow] (Sample 1) -- node[anchor=east] {Negative} (Sample 1 Neg);
+\draw [arrow] (-7.3cm,-13.45cm) |- node[anchor=south] {Remove ID} (Individual Tests);
+\draw [arrow] (7.3cm,-13.45cm) |- node[anchor=west] {Remove ID} (6.6,-10.3);
+%\draw [arrow] (build) -| node[anchor=east] {no points left} (fizzle);
+
+\end{tikzpicture}
+\bigskip
+
+\end{document}
