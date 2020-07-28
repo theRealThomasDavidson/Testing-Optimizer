@@ -24,14 +24,14 @@ class PatientID:
     def updateStatus(self, newStatus)
     """
     i = 1
-    statusRead = {0: "Awaiting Batch Testing",
+    _statusRead = {0: "Awaiting Batch Testing",
                   1: "Awating Batch Results",
                   2: "Awaiting Individual Testing",
                   3: "Awaiting Individual Results",
                   4: "Negative Result",
                   5: "Positive Result"
                   }
-    statusProgress = {0:(1,),
+    _statusProgress = {0:(1,),
                       1:(2,4),
                       2:(3,),
                       3:(4,5)
@@ -57,18 +57,18 @@ class PatientID:
 
     def __str__(self):
         return "Start of ID #: \t\t{}\nName: \t\t\t{}\nTesting status: \t{}".format(str(self.num)[:8], str(self.name),
-                                                                                    PatientID.statusRead[self.status])
+                                                                                    PatientID._statusRead[self.status])
 
     def updateStatus(self, newStatus):
         if self.status not in PatientID.statusProgress:
             raise ValueError("This patient has Already received an outcome. This was: {}".format(
-                PatientID.statusRead[self.status]))
-        if newStatus not in PatientID.statusProgress[self.status]:
+                PatientID._statusRead[self.status]))
+        if newStatus not in PatientID._statusProgress[self.status]:
             raise ValueError("This Patient is at the stage: {} and cannot move directly to {}".format(
-                PatientID.statusRead[self.status], PatientID.statusRead[newStatus]))
+                PatientID.statusRead[self.status], PatientID._statusRead[newStatus]))
         self.status = newStatus
         if self.status == 4 or self.status == 5:
-            print("Ready to send back {}".format(PatientID.statusRead[self.status]))
+            print("Ready to send back {}".format(PatientID._statusRead[self.status]))
 
 class Hopper:
     """
