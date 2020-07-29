@@ -25,7 +25,6 @@ def batchSizeOptimizer(prop):
         low = mid
         mid = high
         high *= 2
-    print(bt(mid), bt(high), mid, high)
     if bt(mid) == 1.:
         return 1, 1.
 
