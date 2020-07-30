@@ -1,9 +1,9 @@
 import hashlib
 from time import time
 from queue import Queue
-from threading import Semaphore
-
+import threading
 idNum = 0
+cases = [1, 2]
 
 
 def batchSizeOptimizer(prop):
@@ -88,7 +88,7 @@ class PatientID:
                        3: (3, 4, 5)
                        }
 
-    def __init__(self, cases, name=None, status=0):
+    def __init__(self, name=None, status=0):
         """
         this method initializes the PatientID Object
         :param name: expects a string and will only use None if no name is specified,
@@ -104,8 +104,7 @@ class PatientID:
         if not isinstance(idNum, int):
             idNum = -342
         idNum += 1
-        self.cases = cases
-        self.num = hashlib.sha256((str(time()) + str(idNum)).encode() ).hexdigest()
+        self.num = hashlib.sha256( (str(time()) + str(idNum)).encode() ).hexdigest()
         self.name = name
         self._status = status
 
@@ -135,9 +134,10 @@ class PatientID:
                 PatientID._statusRead[self._status], PatientID._statusRead[newStatus]))
         self._status = newStatus
         if self._status == 4 or self._status == 5:
-            self.cases[1] += 1
-            self.cases [0] += self._status == 5
-            print("Ready to send back {}".format(PatientID._statusRead[self._status]))
+            global cases
+            cases[1] += 1
+            cases[0] += (self._status == 5)
+            print("Ready to send back {} for :\n{}".format(PatientID._statusRead[self._status], self))
 
 
 class Hopper:
@@ -169,7 +169,7 @@ class Hopper:
                    4: "Negative Result",
                    5: "Positive Result"
                    }
-    def __init__(self, cases, sema, batchTest, retest):
+    def __init__(self, sema, batchTest, retest):
         """
         this method initializes the class and identifies the objects it will send item to.
         :param cases: a list of 2 ints where the first is the number of positive samples you have received in the past and
@@ -184,7 +184,6 @@ class Hopper:
         self.retest = retest
         self._Q = Queue()
         self.running = True
-        self.cases = cases
 
     def shutdown(self):
         """
@@ -219,8 +218,9 @@ class Hopper:
         :return:
         """
         while self.running:
-            size = _Q.qsize()
-            bsize = batchSizeOptimizer(self.cases[0]/self.cases[1])[0]
+            size = self._Q.qsize()
+            global cases
+            bsize = batchSizeOptimizer(cases[0]/cases[1])[0]
             for _ in range(size//bsize):
                 items = []
                 for __ in range(bsize):
@@ -396,10 +396,11 @@ class BatchStore:
         if res == "N" or res == "n":
             print("Sample:\n{}\nIs being added back into testing queue. ".format(a))
             self._minorQ.put(a)
+            return
         if res == "Y" or res == "y":
             a.updateStatus(1)
             self._testing[a.num] = a
-        return
+            return a
 
     def results(self, id, result):
         """
@@ -470,10 +471,11 @@ class IndividualStore:
         if res == "N" or res == "n":
             print("Sample:\n{}\nIs being added back into testing queue. ".format(a))
             self._minorQ.put(a)
+            return
         if res == "Y" or res == "y":
             a.updateStatus(3)
             self._testing[a.num] = a
-        return
+            return a
 
     def put(self, items):
         """
@@ -517,8 +519,137 @@ class IndividualStore:
         patient.updateStatus(4 + result)
 
 
-def testing():
+class BatchTestingOrganizer:
+    def __init__(self):
+        """
+        this method will initialize all the objects we use to hold data in during the batch testing protocols it also
+        starts any needed asynchronous threads.
+        """
+        self.running = True
+        self.hopperFeed = threading.Semaphore()
+        self.individualStore = IndividualStore()
+        self.batchStore = BatchStore()
+        self.hopper = Hopper(self.hopperFeed, self.batchStore, self.individualStore)
+        threading.Thread(target=self.hopper.makeBatch).start()
 
+    def newID(self, name):
+        """
+        this method adds a new PatientID to
+        :param name: the name associated with the new Patient ID
+        :return:
+        """
+        self.hopper.put(PatientID(name))
+        self.hopperFeed.release()
+
+    def shutdown(self):
+        """
+        this should safely shut down all threads starting with new information threads then processing
+        threads in other objects and lastly processing threads in this object when all is done we will
+        save objects as pickles
+        :return:
+        """
+        self.hopper.shutdown()      #shutd downt he makeBatch thread
+        self.running = False
+
+    def getNextTest(self):
+        iSize = self.individualStore._Q.qsize() + self.individualStore._minorQ.qsize()
+        bSize = self.batchStore._Q.qsize() + self.batchStore._minorQ.qsize()
+        if bSize >= iSize:
+            return self.batchStore.getNextTest()
+        else:
+            return self.individualStore.getNextTest()
+
+    def results(self, id, result):
+        """
+        This item handles when individuals receive test results. pushes further methods to handle the next steps in
+        testing.
+        :param item: a str that holds the PatientID number or it is a PatientID object that results have been found for.
+        :param result: this is a bool that will be True when the results are positive and False when the results are
+        negative.
+        :return:
+        """
+        if isinstance(id, PatientID):
+            self.individualStore.results(id,result)
+            return
+        if isinstance(id, Batch):
+            self.batchStore.results(id, result)
+            return
+        if not isinstance(id, str):
+            raise TypeError("The Identification used for results was not a recognized type.")
+        else:
+            try:
+                self.batchStore.results(id, result)
+            except ValueError:
+                self.individualStore.results(id, result)
+            return
+
+
+
+def testing():
+    global cases
+    organ = BatchTestingOrganizer()
+    cases = [40, 390]
+    names = [
+        "alice",
+        "bob",
+        "carol",
+        "dennis",
+        "eloise",
+        "franklin",
+        "greg",
+        "hannah",
+        "irene",
+        "james",
+        "kim",
+        "louis",
+        "mary",
+        "nicole",
+        "ogden",
+        "pearl",
+        "quinton",
+        "rachael",
+        "steven",
+        "tanya",
+        "urkel",
+        "vince",
+        "will",
+        "xander",
+        "yolanda",
+        "zander"
+    ]
+    for name in names:
+        organ.newID(name)
+    
+    print("size of the queue is :", organ.batchStore._Q.qsize())
+    ID1 = organ.getNextTest()
+    ID2 = organ.getNextTest()
+    ID3 = organ.getNextTest()
+
+    print("cases before any results:", cases)
+    organ.batchStore.results(ID1, False)
+    print("cases after negative batch:", cases)
+    organ.batchStore.results(ID2, True)
+    print("cases after positive batch:", cases)
+    print("Individual queue after positive:", organ.individualStore._Q.qsize())
+
+    ID4 = organ.getNextTest()
+    ID5 = organ.getNextTest()
+    ID6 = organ.getNextTest()
+
+    print(ID1)
+    print(ID2)
+    print(ID3)
+    print(ID4)
+    print(ID5)
+    print(ID6)
+
+    print("size of individual queue after 1 pop is :", organ.batchStore._Q.qsize())
+
+
+    organ.shutdown()
+
+
+    """
     a, b, c, d, e = PatientID(), PatientID(), PatientID(), PatientID(), PatientID()
     store = IndividualStore()
     print(a)
@@ -555,7 +686,7 @@ def testing():
     store.results(d, False)
     print(d)
 
-    print(store._testing)
+    print(store._testing)"""
 
 
 
