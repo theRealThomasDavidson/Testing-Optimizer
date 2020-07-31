@@ -1,3 +1,27 @@
+
+warranty = """
+    This is the Batch Testing Organizer. it hopes to remove some of the logistical headaches of batch virus testing
+    Copyright (C) 2020  Thomas Davidson (davidson.thomasj@gmail.com)
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+
+copyr = """Testing Optimizer  Copyright (C) 2020  Thomas Davidson (davidson.thomasj@gmail.com)
+    This program comes with ABSOLUTELY NO WARRANTY; for details type `show w'.
+    This is free software, and you are welcome to redistribute it
+    under certain conditions; type `show c' for details."""
+
 import hashlib
 from time import time
 from queue import Queue
@@ -586,6 +610,9 @@ class BatchTestingOrganizer:
 
 
 def testing():
+    print(copyr)
+    print("this environment is meant for testing and is not expected to have compatibility with the"
+          " show c and show w commands. running main will allow for these functions.")
     global cases
     organ = BatchTestingOrganizer()
     cases = [40, 390]
@@ -619,10 +646,12 @@ def testing():
     ]
     for name in names:
         organ.newID(name)
-    
+
     print("size of the queue is :", organ.batchStore._Q.qsize())
     ID1 = organ.getNextTest()
+    ID1 = ID1.num
     ID2 = organ.getNextTest()
+    ID2 = ID2.num
     ID3 = organ.getNextTest()
 
     print("cases before any results:", cases)
