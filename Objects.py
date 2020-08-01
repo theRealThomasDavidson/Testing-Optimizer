@@ -161,8 +161,9 @@ class PatientID:
             global cases
             cases[1] += 1
             cases[0] += (self._status == 5)
+            print("##########PATIENT RESULTS##########")
             print("Ready to send back {} for :\n{}".format(PatientID._statusRead[self._status], self))
-
+            print("###################################")
 
 class Hopper:
     """
@@ -228,6 +229,9 @@ class Hopper:
                 ValueError("Patient cannot be put into batch testing schedule with status:\n {}".format(
                     Hopper._statusRead[items._status]))
             self._Q.put(items)
+            print("############NEW PATIENT############")
+            print(items)
+            print("###################################")
             return
         if isinstance(items, (tuple, list)):
             for item in items:
@@ -235,6 +239,36 @@ class Hopper:
             return
         raise TypeError("Only put individual PatientIDs into this Hopper object. The object added was of type: {}"\
                         .format(type(items)))
+
+    def lastBatch(self):
+        """
+        this will be a method run when all batches and individual tests are done so that we can clear any remaining
+        patients
+        :return:
+        """
+        size = self._Q.qsize()
+        global cases
+        bsize = batchSizeOptimizer(cases[0]/cases[1])[0]
+        for _ in range(size//bsize):
+            items = []
+            for __ in range(bsize):
+                items.append(self._Q.get())
+            temp = Batch(items, self.retest)
+            self.batchTest.put(temp)
+        if self._Q.empty():
+            return
+        size = self._Q.qsize()
+        if size == 1:
+            item = self._Q.get()
+            item.updateStatus(2)
+            self.retest.put(item)
+        items = []
+        for _ in range(size):
+            items.append(self._Q.get())
+        temp = Batch(items, self.retest)
+        self.batchTest.put(temp)
+
+
 
     def makeBatch(self):
         """
@@ -325,8 +359,13 @@ class Batch:
                     raise ValueError("Batch was made with IDs not at the same stage")
 
     def __str__(self):
-        return "Start of Batch ID #: \t{}\nSize: \t\t\t{}\nTesting status: \t{}"\
-            .format(str(self.num)[:8], str(len(self.items)), PatientID._statusRead[self._status])
+        members = ""
+        for item in self.items:
+            members += "\t\t{}\n".format(item.num[:8])
+        members = "Members: " + members[1:-1]
+        return "Start of Batch ID #: \t{}\nSize: \t\t\t{}\nTesting status: \t{}\n"\
+            .format(str(self.num)[:8], str(len(self.items)), PatientID._statusRead[self._status]) + members
+
 
     def updateStatus(self, newStatus):
         """
@@ -576,8 +615,20 @@ class BatchTestingOrganizer:
         self.running = False
 
     def getNextTest(self):
+        """
+        this method will return the next test to be put forward
+        :return: a Batch or PatientID associated with the next Test to be preformed
+        """
         iSize = self.individualStore._Q.qsize() + self.individualStore._minorQ.qsize()
         bSize = self.batchStore._Q.qsize() + self.batchStore._minorQ.qsize()
+        if iSize + bSize == 0:
+            self.hopper.lastBatch()
+            iSize = self.individualStore._Q.qsize() + self.individualStore._minorQ.qsize()
+            bSize = self.batchStore._Q.qsize() + self.batchStore._minorQ.qsize()
+            if iSize + bSize == 0:
+                print("All samples are being tested.")
+                return None
+
         if bSize >= iSize:
             return self.batchStore.getNextTest()
         else:
@@ -645,8 +696,9 @@ def testing():
         "zander"
     ]
     for name in names:
-        organ.newID(name)
-
+        print("add patient\n{}".format(name))
+    organ.shutdown()
+    return
     print("size of the queue is :", organ.batchStore._Q.qsize())
     ID1 = organ.getNextTest()
     ID1 = ID1.num

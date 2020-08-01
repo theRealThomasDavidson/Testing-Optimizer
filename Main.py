@@ -1,6 +1,8 @@
+import re
+import Objects
 
 warranty = """
-    This is the Batch Testing Organizer. it hopes to remove some of the logistical headaches of batch virus testing
+    \tThis is the Batch Testing Organizer. it hopes to remove some of the logistical headaches of batch virus testing
     Copyright (C) 2020  Thomas Davidson (davidson.thomasj@gmail.com)
 
     This program is free software: you can redistribute it and/or modify
@@ -16,14 +18,12 @@ warranty = """
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
+
 copyr = """Testing Organizer Copyright (C) 2020  Thomas Davidson (davidson.thomasj@gmail.com)
     This program comes with ABSOLUTELY NO WARRANTY; for details type `show w'.
     This is free software, and you are welcome to redistribute it
     under certain conditions; type `show c' for details."""
 
-
-import re
-import Objects
 
 def batchSizeOptimizer(prop):
     """
@@ -76,9 +76,9 @@ def main():
     :return:
     """
     running = True
-    print (copyr)
+    print(copyr)
     print("Loading...")
-    Objects.cases = [12, 340]
+    Objects.cases = [1, 2]
     organ = Objects.BatchTestingOrganizer()
     copyrightPattern = re.compile(r"(show c)\s*")
     warrantyPattern = re.compile(r"(show w)\s*")
@@ -89,60 +89,87 @@ def main():
     popPattern = re.compile(r"population\s*")
     batchPattern = re.compile(r"batch size\s*")
     resultsPattern = re.compile(r"(?<=test results)\s*")
+    nextTestPattern = re.compile(r"get next(?=\s*)")
     posNegPattern = re.compile(r"(\+|-)(?=\s*)")
+    digitPattern = re.compile(r"(\d+|oops)(?=\s*)")
     cases = [1, 2]                                                      #cases with positives first then totoal pop our null is 50/50
                                                                         #and becomes negligable after we have a lot of samples
+    runningTests = {}
+    runningTestNum = 0
     print("Loading Done")
     while running:
-        action = input("what action should we take? ")
-        #print(action)
-        if exitPattern.search(action.lower()):
-            organ.shutdown()
-            running = False
-            break
+        try:
+            action = input("what action should we take? ")
+            #print(action)
+            if exitPattern.search(action.lower()):
+                organ.shutdown()
+                running = False
+                break
 
-        if propPattern.search(action.lower()):
-            number = propPattern.search(action.lower()).group(0)
-            number = float(number)
-            batchSizeOptimizer(number)      #just run for the print probably will fix this later
+            if propPattern.search(action.lower()):
+                number = propPattern.search(action.lower()).group(0)
+                number = float(number)
+                batchSizeOptimizer(number)      #just run for the print probably will fix this later
+                continue
+
+            if addPattern.search(action.lower()):
+                #print(addPattern.search(action.lower()))
+                numbers = addPattern.search(action.lower()).group(0)
+                pos, neg = [int(x) for x in numbers.split()]
+                Objects.cases[0] += pos
+                Objects.cases[1] += neg + pos
+                batchSizeOptimizer((Objects.cases[0]/Objects.cases[1]))
+                continue
+
+            if popPattern.search(action.lower()):
+                print("Positive cases: \t{}\nTotal tests:\t\t{}\nPositive percentage: \t{:.4f}%".format(
+                    Objects.cases[0], Objects.cases[1], 100. * Objects.cases[0]/Objects.cases[1]))
+                continue
+
+            if batchPattern.search(action.lower()):
+                batchSizeOptimizer((Objects.cases[0] / Objects.cases[1]))
+                continue
+
+            if newCasePattern.search(action.lower()):
+                organ.newID(input("Enter new persons name: "))
+
+            if resultsPattern.search(action.lower()):
+                print("#########################################")
+                for key in runningTests:
+                    if runningTests[key]._status not in (1, 3):
+                        continue
+                    print("Use {} to link to\n{}\n#########################################".format(key, runningTests[key]))
+                temp = digitPattern.search(input("Use the link number to report result for that. Use 'oops' to go back: "))
+                while not temp:
+                    temp = digitPattern.search(
+                        input("Use the link number to report result for that. Use 'oops' to go back: "))
+                if temp.group(0) == "oops":
+                    continue
+                if int(temp.group(0)) not in runningTests:
+                    print("{} did not appear to be in the the active tests.")
+                tested = runningTests[int(temp.group(0))]
+                result = ""
+                while not result:
+                    a = input("result (+ or -): ")
+                    if posNegPattern.search(a):
+                        result = posNegPattern.search(a).group(0)
+                result = (result == "+")
+                organ.results(tested, result)
+
+
+            if nextTestPattern.search(action.lower()):
+                next = organ.getNextTest()
+                if next:
+                    runningTests[runningTestNum] = next
+                    runningTestNum += 1
+            if warrantyPattern.search(action.lower()):
+                print(warranty)
+            if copyrightPattern.search(action.lower()):
+                print("Tell 'em Thomas sent ya' and that he expect that ya'll won't keep him waitin' next time.\n"
+                      "also any redistribution must contain the all copyright information.")
+        except Exception as e:
+            print("Unexpected error:", repr(e))
             continue
-
-        if addPattern.search(action.lower()):
-            #print(addPattern.search(action.lower()))
-            numbers = addPattern.search(action.lower()).group(0)
-            pos, neg = [int(x) for x in numbers.split()]
-            cases[0] += pos
-            cases[1] += neg + pos
-            batchSizeOptimizer((cases[0]/cases[1]))
-            continue
-
-        if popPattern.search(action.lower()):
-            print("Positive cases: \t{}\nTotal tests:\t\t{}\nPositive percentage: \t{:.4f}%".format(cases[0], cases[1], 100. * cases[0]/cases[1]))
-            continue
-
-        if batchPattern.search(action.lower()):
-            batchSizeOptimizer((cases[0] / cases[1]))
-            continue
-
-        if newCasePattern.search(action.lower()):
-            organ.newID(input("Enter new persons name: "))
-
-        if resultsPattern.search(action.lower()):
-            ##TODO: this while mess
-            result = ""
-            while not result:
-                a = input("result (+ or -)")
-                if posNegPattern.search(a):
-                    result = posNegPattern.search(a).group(0)
-            result = (result == "+")
-        if warrantyPattern.search(action.lower()):
-            print(warranty)
-        if copyrightPattern.search(action.lower()):
-            print("Tell 'em Thomas sent ya' and that he expect that ya'll won't keep him waitin' next time.")
-
-
-
-
 
     print("Thank you, good bye.")
 

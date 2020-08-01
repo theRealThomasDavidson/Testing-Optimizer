@@ -1,2 +1,5 @@
 # don't keep python compiled files
 __pycache__
+
+# test imput files to be ignored
+*test.txt
