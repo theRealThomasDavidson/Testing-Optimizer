@@ -191,7 +191,7 @@ class Hopper:
     :param running: a bool that acts as a flag to turn off the makeBatch threads when they are running
     :param cases: a list of 2 ints where the first is the number of positive samples you have received in the past and
         the second number is the total population of testing results
-    :param sema: this is a semaphore to indicate when we sould check to see if batch testing is appropriate
+    :param feed: this is a semaphore to indicate when we sould check to see if batch testing is appropriate
     :param batchTest: this is the BatchStore object that we will pass our batches to
     :param retest: this is the IndividualStore object that we will be using for retesting PatientIDs that get
         positive batch results
@@ -201,7 +201,7 @@ class Hopper:
         this
     def shutdown(self):
     def put(self, items):
-    def def makeBatch(self, sema, batchTest, retest):
+    def def makeBatch(self, feed, batchTest, retest):
     """
     _statusRead = {0: "Awaiting Batch Testing",
                    1: "Awating Batch Results",
@@ -211,17 +211,19 @@ class Hopper:
                    5: "Positive Result"
                    }
 
-    def __init__(self, sema, batchTest, retest, restore=None):
+    def __init__(self, feed, ready, batchTest, retest, restore=None):
         """
         this method initializes the class and identifies the objects it will send item to.
         :param cases: a list of 2 ints where the first is the number of positive samples you have received in the past and
             the second number is the total population of testing results
-        :param sema: this is a semaphore to indicate when we sould check to see if batch testing is appropriate
+        :param feed: this is a semaphore to indicate when we should check to see if batch testing is appropriate
+        :param ready: this is a semaphore to indicate when we should save the objects.
         :param batchTest: this is the BatchStore object that we will pass our batches to
         :param retest: this is the IndividualStore object that we will be using for retesting PatientIDs that get
             positive batch results
         """
-        self.sema = sema
+        self.feed = feed
+        self.saveReady = ready
         self.batchTest = batchTest
         self.retest = retest
         self._Q = Queue()
@@ -236,7 +238,11 @@ class Hopper:
         :return:
         """
         self.running = False
-        self.sema.release()
+        self.feed.release()
+
+    def restart(self):
+        self.running = True
+        self.saveReady.release()
 
     def save(self):
         items = []
@@ -298,7 +304,7 @@ class Hopper:
 
     def makeBatch(self):
         """
-        this will be a method run with it's own thread that will automaticaly add items to the
+        this will be a method run with it's own thread that will automatically add items to the
         :return:
         """
         while self.running:
@@ -309,9 +315,13 @@ class Hopper:
                 items = []
                 for __ in range(bsize):
                     items.append(self._Q.get())
-                temp = Batch(self.retest, items=items)
-                self.batchTest.put(temp)
-            self.sema.acquire()
+                if len(items) > 1:
+                    temp = Batch(self.retest, items=items)
+                    self.batchTest.put(temp)
+                elif len(items) == 1:
+                    self.retest.put(items[0])
+            self.feed.acquire()
+        self.saveReady.release()
 
 
 class Batch:
@@ -664,14 +674,15 @@ class BatchTestingOrganizer:
         """
         self.running = True
         self.hopperFeed = threading.Semaphore()
+        self.saveReady = threading.Semaphore()
         if not restore:
             self.individualStore = IndividualStore()
             self.batchStore = BatchStore()
-            self.hopper = Hopper(self.hopperFeed, self.batchStore, self.individualStore)
+            self.hopper = Hopper(self.hopperFeed, self.saveReady, self.batchStore, self.individualStore)
         else:
             self.individualStore = IndividualStore(restore=restore["Istore"])
             self.batchStore = BatchStore(restore=restore["Bstore"], retest=self.individualStore)
-            self.hopper = Hopper(self.hopperFeed, self.batchStore, self.individualStore, restore=restore["hopper"])
+            self.hopper = Hopper(self.hopperFeed, self.saveReady, self.batchStore, self.individualStore, restore=restore["hopper"])
         threading.Thread(target=self.hopper.makeBatch).start()
 
     def newID(self, name):
@@ -690,6 +701,19 @@ class BatchTestingOrganizer:
             "Bstore": self.batchStore.save()
         }
 
+    def saveAndRun(self):
+        """
+        this funtion should save the project while keeping the objects running.
+        :return: a save object
+        """
+        print("Saving and Shutting down.")
+        self.hopper.shutdown()      #shutd downt he makeBatch thread
+        self.saveReady.acquire()
+        state = self.save()
+        self.hopper.restart()
+        self.saveReady.acquire()
+        return state
+
     def shutdown(self):
         """
         this should safely shut down all threads starting with new information threads then processing
@@ -700,9 +724,7 @@ class BatchTestingOrganizer:
         print("Saving and Shutting down.")
         self.hopper.shutdown()      #shutd downt he makeBatch thread
         self.running = False
-        now = time()
-        while time() < (3 + now):
-            pass
+        self.saveReady.acquire()
         return self.save()
 
     def getNextTest(self):

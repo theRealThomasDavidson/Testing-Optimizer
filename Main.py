@@ -138,6 +138,7 @@ def main():
     nextTestPattern = re.compile(r"get next(?=\s*)")
     posNegPattern = re.compile(r"(\+|-)(?=\s*)")
     digitPattern = re.compile(r"(\d+|oops)(?=\s*)")
+    savePattern = re.compile(r"(save)(?=\s*)")
     print("Loading Done")
     while running:
         try:
@@ -180,7 +181,7 @@ def main():
                 continue
 
             if newCasePattern.search(action.lower()):
-                organ.newID(input("Enter new persons name: "))
+                organ.newID(input("Enter new Accession Number: "))
 
             if resultsPattern.search(action.lower()):
                 print("#########################################")
@@ -215,6 +216,15 @@ def main():
             if copyrightPattern.search(action.lower()):
                 print("Tell 'em Thomas sent ya' and that he expect that ya'll won't keep him waitin' next time.\n"
                       "also any redistribution must contain the all copyright information.")
+            if savePattern.search(action.lower()):
+                print("Shutting down program...")
+                # create a pickle file
+                filename = ".\SavedStates\BatchOrganizer_Date_{}.pkl".format(datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+                picklefile = open(filename, 'wb+')
+                saved = organ.saveAndRun()
+                pickle.dump(saved, picklefile)
+                picklefile.close()
+                print("Save successful in {}".format(filename))
         except Exception as e:
             print("Unexpected error:", repr(e))
             continue
