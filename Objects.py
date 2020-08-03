@@ -112,7 +112,7 @@ class PatientID:
                        3: (3, 4, 5)
                        }
 
-    def __init__(self, name=None, status=0):
+    def __init__(self, accession_number=None, status=0, restore=None):
         """
         this method initializes the PatientID Object
         :param name: expects a string and will only use None if no name is specified,
@@ -128,13 +128,28 @@ class PatientID:
         if not isinstance(idNum, int):
             idNum = -342
         idNum += 1
+        if restore:
+            self.restore(restore)
+            return
         self.num = hashlib.sha256( (str(time()) + str(idNum)).encode() ).hexdigest()
-        self.name = name
+        self.name = accession_number
         self._status = status
 
     def __str__(self):
-        return "Start of ID #: \t\t{}\nName: \t\t\t{}\nTesting status: \t{}".format(str(self.num)[:8], str(self.name),
+        return "Start of ID #: \t\t{}\nAccession Number: \t{}\nTesting status: \t{}".format(str(self.num)[:8], str(self.name),
                                                                                     PatientID._statusRead[self._status])
+
+    def save(self):
+        return {
+            "num": self.num,
+            "name":self.name,
+            "status": self._status
+        }
+
+    def restore(self, info):
+        self.num = info["num"]
+        self.name = info["name"]
+        self._status = info["status"]
 
     def updateStatus(self, newStatus):
         """
@@ -151,10 +166,10 @@ class PatientID:
         if self._status not in PatientID._statusProgress:
             if self._status == newStatus:
                 return
-            raise ValueError("This patient has Already received an outcome. This was: {}".format(
+            raise ValueError("This patient has already received an outcome. This was: {}".format(
                 PatientID._statusRead[self._status]))
         if newStatus not in PatientID._statusProgress[self._status]:
-            raise ValueError("This Patient is at the stage: {} and cannot move directly to {}".format(
+            raise ValueError("This patient is at the stage: {} and cannot move directly to {}".format(
                 PatientID._statusRead[self._status], PatientID._statusRead[newStatus]))
         self._status = newStatus
         if self._status == 4 or self._status == 5:
@@ -164,6 +179,7 @@ class PatientID:
             print("##########PATIENT RESULTS##########")
             print("Ready to send back {} for :\n{}".format(PatientID._statusRead[self._status], self))
             print("###################################")
+
 
 class Hopper:
     """
@@ -194,7 +210,8 @@ class Hopper:
                    4: "Negative Result",
                    5: "Positive Result"
                    }
-    def __init__(self, sema, batchTest, retest):
+
+    def __init__(self, sema, batchTest, retest, restore=None):
         """
         this method initializes the class and identifies the objects it will send item to.
         :param cases: a list of 2 ints where the first is the number of positive samples you have received in the past and
@@ -209,6 +226,9 @@ class Hopper:
         self.retest = retest
         self._Q = Queue()
         self.running = True
+        if restore:
+            for item in restore["items"]:
+                self.put(PatientID(restore=item))
 
     def shutdown(self):
         """
@@ -217,6 +237,12 @@ class Hopper:
         """
         self.running = False
         self.sema.release()
+
+    def save(self):
+        items = []
+        for _ in range(self._Q.qsize()):
+            items.append(self._Q.get().save())
+        return {"items": items}
 
     def put(self, items):
         """
@@ -283,7 +309,7 @@ class Hopper:
                 items = []
                 for __ in range(bsize):
                     items.append(self._Q.get())
-                temp = Batch(items, self.retest)
+                temp = Batch(self.retest, items=items)
                 self.batchTest.put(temp)
             self.sema.acquire()
 
@@ -326,11 +352,23 @@ class Batch:
                    5: "Positive Result"
                    }
 
-    def __init__(self, items, retestQueue):
+    def __init__(self, retestQueue, items=None, restore=None):
         """
         this initializes the batch and inputs all the items.
         :param items: a tuple with all elements of class PatientID these are the elements that are to be used together.
         """
+        if not isinstance(retestQueue, IndividualStore):
+            raise TypeError("please use a object of type IndividualStore as retestQueue. used object is of type {}"\
+                            .format(type(retestQueue)))
+        self._retest = retestQueue
+        if restore:
+            self.num = restore["num"]
+            self._status = restore["status"]
+            self.items = []
+            for item in restore["items"]:
+                self.items.append(PatientID(restore=item))
+            return
+
         global idNum
         if not isinstance(idNum, int):
             idNum = -342
@@ -338,10 +376,6 @@ class Batch:
         self.num = hashlib.sha256((str(time()) + str(idNum)).encode() ).hexdigest()
         self.items = items
         self._status = None
-        if not isinstance(retestQueue, IndividualStore):
-            raise TypeError("please use a object of type IndividualStore as retestQueue. used object is of type {}"\
-                            .format(type(retestQueue)))
-        self._retest = retestQueue
 
         if not isinstance(items, (tuple, list)):
             raise TypeError("Batch tried to initialize with a non iterable type. Instead useing type:{}".format(
@@ -361,11 +395,20 @@ class Batch:
     def __str__(self):
         members = ""
         for item in self.items:
-            members += "\t\t{}\n".format(item.num[:8])
+            members += "\t\t{}\n".format(item.name)
         members = "Members: " + members[1:-1]
         return "Start of Batch ID #: \t{}\nSize: \t\t\t{}\nTesting status: \t{}\n"\
             .format(str(self.num)[:8], str(len(self.items)), PatientID._statusRead[self._status]) + members
 
+    def save(self):
+        items = []
+        for item in self.items:
+            items.append(item.save())
+        return {
+            "num": self.num,
+            "status": self._status,
+            "items": items
+        }
 
     def updateStatus(self, newStatus):
         """
@@ -420,10 +463,28 @@ class BatchStore:
                    5: "Positive Result"
                    }
 
-    def __init__(self):
+    def __init__(self, restore=None,retest=None):
         self._Q = Queue()
         self._minorQ = Queue()
         self._testing = {}
+        if restore:
+            if not isinstance(retest, IndividualStore):
+                raise TypeError("Cannot restore Batch store without a Restesting queue")
+            for item in restore["items"]:
+                self._Q.put(Batch(retest, restore=item))
+            for item in restore["testing"]:
+                self._testing[item] = Batch(retest, restore=restore["testing"][item])
+
+    def save(self):
+        items = []
+        for _ in range(self._minorQ.qsize()):
+            items.append(self._minorQ.get().save())
+        for _ in range(self._Q.qsize()):
+            items.append(self._Q.get().save())
+        testingStorage = {}
+        for item in self._testing:
+            testingStorage[item] = self._testing[item].save()
+        return {"items": items, "testing": testingStorage}
 
     def put(self, items):
         """
@@ -482,8 +543,7 @@ class BatchStore:
             raise ValueError("The Identification used for results was not found in Batches waiting for results")
         if not self._testing[id]:
             raise ValueError("This Batch seems to already have results.")
-        batch = self._testing[id]
-        self._testing[id] = None
+        batch = self._testing.pop(id)
         batch.updateStatus(4 - 2 * result)
 
 
@@ -514,10 +574,26 @@ class IndividualStore:
                    5: "Positive Result"
                    }
 
-    def __init__(self):
+    def __init__(self, restore=None):
         self._Q = Queue()
         self._minorQ = Queue()
         self._testing = {}
+        if restore:
+            for item in restore["items"]:
+                self._Q.put(PatientID(restore=item))
+            for item in restore["testing"]:
+                self._testing[item] = PatientID(restore=restore["testing"][item])
+
+    def save(self):
+        items = []
+        for _ in range(self._minorQ.qsize()):
+            items.append(self._minorQ.get().save())
+        for _ in range(self._Q.qsize()):
+            items.append(self._Q.get().save())
+        testingStorage = {}
+        for item in self._testing:
+            testingStorage[item] = self._testing[item].save()
+        return {"items": items, "testing": testingStorage}
 
     def getNextTest(self):
         """
@@ -576,23 +652,26 @@ class IndividualStore:
             raise ValueError("The Identification used for results was not found in patients waiting for results")
         if not self._testing[id]:
             raise ValueError("This Patient seems to already have results.")
-        patient = self._testing[id]
-        self._testing[id] = None
-
+        patient = self._testing.pop(id)
         patient.updateStatus(4 + result)
 
 
 class BatchTestingOrganizer:
-    def __init__(self):
+    def __init__(self, restore=None):
         """
         this method will initialize all the objects we use to hold data in during the batch testing protocols it also
         starts any needed asynchronous threads.
         """
         self.running = True
         self.hopperFeed = threading.Semaphore()
-        self.individualStore = IndividualStore()
-        self.batchStore = BatchStore()
-        self.hopper = Hopper(self.hopperFeed, self.batchStore, self.individualStore)
+        if not restore:
+            self.individualStore = IndividualStore()
+            self.batchStore = BatchStore()
+            self.hopper = Hopper(self.hopperFeed, self.batchStore, self.individualStore)
+        else:
+            self.individualStore = IndividualStore(restore=restore["Istore"])
+            self.batchStore = BatchStore(restore=restore["Bstore"], retest=self.individualStore)
+            self.hopper = Hopper(self.hopperFeed, self.batchStore, self.individualStore, restore=restore["hopper"])
         threading.Thread(target=self.hopper.makeBatch).start()
 
     def newID(self, name):
@@ -604,6 +683,13 @@ class BatchTestingOrganizer:
         self.hopper.put(PatientID(name))
         self.hopperFeed.release()
 
+    def save(self):
+        return{
+            "hopper": self.hopper.save(),
+            "Istore": self.individualStore.save(),
+            "Bstore": self.batchStore.save()
+        }
+
     def shutdown(self):
         """
         this should safely shut down all threads starting with new information threads then processing
@@ -611,8 +697,13 @@ class BatchTestingOrganizer:
         save objects as pickles
         :return:
         """
+        print("Saving and Shutting down.")
         self.hopper.shutdown()      #shutd downt he makeBatch thread
         self.running = False
+        now = time()
+        while time() < (3 + now):
+            pass
+        return self.save()
 
     def getNextTest(self):
         """

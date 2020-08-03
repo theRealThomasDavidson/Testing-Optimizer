@@ -1,6 +1,8 @@
 import re
 import Objects
-
+import pickle
+from datetime import datetime
+import os
 warranty = """
     \tThis is the Batch Testing Organizer. it hopes to remove some of the logistical headaches of batch virus testing
     Copyright (C) 2020  Thomas Davidson (davidson.thomasj@gmail.com)
@@ -77,9 +79,53 @@ def main():
     """
     running = True
     print(copyr)
-    print("Loading...")
-    Objects.cases = [1, 2]
-    organ = Objects.BatchTestingOrganizer()
+    pickles = []
+    for root, dirs, files in os.walk("."):
+        path = root.split(os.sep)
+        for file in files:
+            if file.endswith(".pkl"):
+                temp = os.path.join(root, file)
+                pickles.append(temp)
+    pickPattern = re.compile(r"(\d+|none)(?=\s*)")
+    print("#########################################")
+    for ndx in range(len(pickles)):
+        # if runningTests[key]._status not in (1, 3):
+        # continue
+        print("#############Use {} to link to###########\n{}\n#########################################".format(ndx, pickles[ndx]))
+    runningTests = {}
+    runningTestNum = 0
+    while True:
+        temp = pickPattern.search(input("Use the link number to load that file. Use 'None' to start from scratch: "))
+        while not temp:
+            temp = pickPattern.search(
+                input("Use the link number to report result for that. Use 'None' to start from scratch: "))
+
+        if temp.group(0) == "none":
+            print("Loading...")
+            organ = Objects.BatchTestingOrganizer()
+            break
+
+        elif int(temp.group(0)) >= len(pickles):
+            print("{} did not appear to be in the the active tests.".format(int(temp.group(0))))
+            continue
+        else:
+            print("Loading...")
+            filename = pickles[int(temp.group(0))]
+            data = open(filename, 'rb')
+            restore = pickle.load(data)
+            data.close()
+            organ = Objects.BatchTestingOrganizer(restore=restore)
+            for item in organ.individualStore._testing:
+                runningTests[runningTestNum] = organ.individualStore._testing[item]
+                runningTestNum +=1
+            for item in organ.batchStore._testing:
+                runningTests[runningTestNum] = organ.batchStore._testing[item]
+                runningTestNum += 1
+            break
+
+
+    Objects.cases = [1, 2]                                              #cases with positives first then totoal pop our null is 50/50
+                                                                        #and becomes negligable after we have a lot of samples
     copyrightPattern = re.compile(r"(show c)\s*")
     warrantyPattern = re.compile(r"(show w)\s*")
     exitPattern = re.compile(r"(exit|quit)\s*")                         #exit command
@@ -92,17 +138,20 @@ def main():
     nextTestPattern = re.compile(r"get next(?=\s*)")
     posNegPattern = re.compile(r"(\+|-)(?=\s*)")
     digitPattern = re.compile(r"(\d+|oops)(?=\s*)")
-    cases = [1, 2]                                                      #cases with positives first then totoal pop our null is 50/50
-                                                                        #and becomes negligable after we have a lot of samples
-    runningTests = {}
-    runningTestNum = 0
     print("Loading Done")
     while running:
         try:
             action = input("what action should we take? ")
             #print(action)
             if exitPattern.search(action.lower()):
-                organ.shutdown()
+                print("Shutting down program...")
+                # create a pickle file
+                filename = ".\SavedStates\BatchOrganizer_Date_{}.pkl".format(datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+                picklefile = open(filename, 'wb+')
+                saved = organ.shutdown()
+                pickle.dump(saved, picklefile)
+                picklefile.close()
+                print("Save successful in {}".format(filename))
                 running = False
                 break
 
@@ -136,8 +185,8 @@ def main():
             if resultsPattern.search(action.lower()):
                 print("#########################################")
                 for key in runningTests:
-                    if runningTests[key]._status not in (1, 3):
-                        continue
+                    #if runningTests[key]._status not in (1, 3):
+                        #continue
                     print("Use {} to link to\n{}\n#########################################".format(key, runningTests[key]))
                 temp = digitPattern.search(input("Use the link number to report result for that. Use 'oops' to go back: "))
                 while not temp:
@@ -146,8 +195,8 @@ def main():
                 if temp.group(0) == "oops":
                     continue
                 if int(temp.group(0)) not in runningTests:
-                    print("{} did not appear to be in the the active tests.")
-                tested = runningTests[int(temp.group(0))]
+                    print("{} did not appear to be in the the active tests.".format(int(temp.group(0))))
+                tested = runningTests.pop(int(temp.group(0)))
                 result = ""
                 while not result:
                     a = input("result (+ or -): ")
@@ -155,7 +204,6 @@ def main():
                         result = posNegPattern.search(a).group(0)
                 result = (result == "+")
                 organ.results(tested, result)
-
 
             if nextTestPattern.search(action.lower()):
                 next = organ.getNextTest()
@@ -172,7 +220,6 @@ def main():
             continue
 
     print("Thank you, good bye.")
-
 
 if __name__ == "__main__":
     main()
