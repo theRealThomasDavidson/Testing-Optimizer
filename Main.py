@@ -3,6 +3,7 @@ import Objects
 import pickle
 from datetime import datetime
 import os
+import json
 warranty = """
     \tThis is the Batch Testing Organizer. it hopes to remove some of the logistical headaches of batch virus testing
     Copyright (C) 2020  Thomas Davidson (davidson.thomasj@gmail.com)
@@ -25,6 +26,7 @@ copyr = """Testing Organizer Copyright (C) 2020  Thomas Davidson (davidson.thoma
     This program comes with ABSOLUTELY NO WARRANTY; for details type `show w'.
     This is free software, and you are welcome to redistribute it
     under certain conditions; type `show c' for details."""
+
 
 
 def batchSizeOptimizer(prop):
@@ -79,19 +81,19 @@ def main():
     """
     running = True
     print(copyr)
-    pickles = []
+    jasons = []
     for root, dirs, files in os.walk("."):
         path = root.split(os.sep)
         for file in files:
-            if file.endswith(".pkl"):
+            if file.endswith(".json"):
                 temp = os.path.join(root, file)
-                pickles.append(temp)
+                jasons.append(temp)
     pickPattern = re.compile(r"(\d+|none)(?=\s*)")
     print("#########################################")
-    for ndx in range(len(pickles)):
+    for ndx in range(len(jasons)):
         # if runningTests[key]._status not in (1, 3):
         # continue
-        print("#############Use {} to link to###########\n{}\n#########################################".format(ndx, pickles[ndx]))
+        print("#############Use {} to link to###########\n{}\n#########################################".format(ndx, jasons[ndx]))
     runningTests = {}
     runningTestNum = 0
     while True:
@@ -102,17 +104,18 @@ def main():
 
         if temp.group(0) == "none":
             print("Loading...")
+            Objects.cases = [1, 2]
             organ = Objects.BatchTestingOrganizer()
             break
 
-        elif int(temp.group(0)) >= len(pickles):
+        elif int(temp.group(0)) >= len(jasons):
             print("{} did not appear to be in the the active tests.".format(int(temp.group(0))))
             continue
         else:
             print("Loading...")
-            filename = pickles[int(temp.group(0))]
+            filename = jasons[int(temp.group(0))]
             data = open(filename, 'rb')
-            restore = pickle.load(data)
+            restore = json.load(data)
             data.close()
             organ = Objects.BatchTestingOrganizer(restore=restore)
             for item in organ.individualStore._testing:
@@ -124,7 +127,7 @@ def main():
             break
 
 
-    Objects.cases = [1, 2]                                              #cases with positives first then totoal pop our null is 50/50
+                                                #cases with positives first then totoal pop our null is 50/50
                                                                         #and becomes negligable after we have a lot of samples
     copyrightPattern = re.compile(r"(show c)\s*")
     warrantyPattern = re.compile(r"(show w)\s*")
@@ -145,13 +148,11 @@ def main():
             action = input("what action should we take? ")
             #print(action)
             if exitPattern.search(action.lower()):
-                print("Shutting down program...")
-                # create a pickle file
-                filename = ".\SavedStates\BatchOrganizer_Date_{}.pkl".format(datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
-                picklefile = open(filename, 'wb+')
+                #print("Shutting down program...")
+                filename = ".\SavedStates\BatchOrganizer_Date_{}.json".format(datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
                 saved = organ.shutdown()
-                pickle.dump(saved, picklefile)
-                picklefile.close()
+                with open(filename, 'w+') as f:
+                    json.dump(saved, f, indent=4)
                 print("Save successful in {}".format(filename))
                 running = False
                 break
@@ -217,13 +218,11 @@ def main():
                 print("Tell 'em Thomas sent ya' and that he expect that ya'll won't keep him waitin' next time.\n"
                       "also any redistribution must contain the all copyright information.")
             if savePattern.search(action.lower()):
-                print("Shutting down program...")
-                # create a pickle file
-                filename = ".\SavedStates\BatchOrganizer_Date_{}.pkl".format(datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
-                picklefile = open(filename, 'wb+')
+                #print("Saving program state...")
+                filename = ".\SavedStates\BatchOrganizer_Date_{}.json".format(datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
                 saved = organ.saveAndRun()
-                pickle.dump(saved, picklefile)
-                picklefile.close()
+                with open(filename, 'w+') as f:
+                    json.dump(saved, f, indent=4)
                 print("Save successful in {}".format(filename))
         except Exception as e:
             print("Unexpected error:", repr(e))

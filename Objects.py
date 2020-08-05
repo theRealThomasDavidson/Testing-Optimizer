@@ -1,4 +1,8 @@
-
+import hashlib
+from time import time
+from queue import Queue
+import threading
+import json
 warranty = """
     This is the Batch Testing Organizer. it hopes to remove some of the logistical headaches of batch virus testing
     Copyright (C) 2020  Thomas Davidson (davidson.thomasj@gmail.com)
@@ -22,10 +26,6 @@ copyr = """Testing Optimizer  Copyright (C) 2020  Thomas Davidson (davidson.thom
     This is free software, and you are welcome to redistribute it
     under certain conditions; type `show c' for details."""
 
-import hashlib
-from time import time
-from queue import Queue
-import threading
 idNum = 0
 cases = [1, 2]
 
@@ -683,6 +683,8 @@ class BatchTestingOrganizer:
             self.individualStore = IndividualStore(restore=restore["Istore"])
             self.batchStore = BatchStore(restore=restore["Bstore"], retest=self.individualStore)
             self.hopper = Hopper(self.hopperFeed, self.saveReady, self.batchStore, self.individualStore, restore=restore["hopper"])
+            global cases
+            cases = restore["cases"]
         threading.Thread(target=self.hopper.makeBatch).start()
 
     def newID(self, name):
@@ -696,6 +698,7 @@ class BatchTestingOrganizer:
 
     def save(self):
         return{
+            "cases" : cases,
             "hopper": self.hopper.save(),
             "Istore": self.individualStore.save(),
             "Bstore": self.batchStore.save()
@@ -706,12 +709,18 @@ class BatchTestingOrganizer:
         this funtion should save the project while keeping the objects running.
         :return: a save object
         """
-        print("Saving and Shutting down.")
+        print("Saving...")
         self.hopper.shutdown()      #shutd downt he makeBatch thread
         self.saveReady.acquire()
         state = self.save()
         self.hopper.restart()
         self.saveReady.acquire()
+        for item in state["Istore"]["items"]:
+            self.individualStore.put(PatientID(restore=item))
+        for item in state["Bstore"]["items"]:
+            self.batchStore.put(Batch(self.individualStore, restore=item))
+        for item in state["hopper"]["items"]:
+            self.hopper.put(PatientID(restore=item))
         return state
 
     def shutdown(self):
@@ -721,7 +730,7 @@ class BatchTestingOrganizer:
         save objects as pickles
         :return:
         """
-        print("Saving and Shutting down.")
+        print("Saving and Shutting down...")
         self.hopper.shutdown()      #shutd downt he makeBatch thread
         self.running = False
         self.saveReady.acquire()

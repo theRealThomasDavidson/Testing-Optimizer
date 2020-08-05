@@ -4,5 +4,10 @@ __pycache__
 # test imput files to be ignored
 *test.txt
 
-# remove any pickle files
+# ignore any storage files
 *.pkl
+*.json
+
+#ignore setup py2exe thing.
+
+setup.py
