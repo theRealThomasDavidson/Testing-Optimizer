@@ -723,7 +723,7 @@ class BatchTestingOrganizer:
         for item in state["Bstore"]["items"]:
             self.batchStore.put(Batch(self.individualStore, restore=item))
         for item in state["hopper"]["items"]:
-            self.hopper.put(PatientID(restore=item))
+            self.hopper.put(PatientID(restore=item), fromSave=True)
         return state
 
     def shutdown(self):
