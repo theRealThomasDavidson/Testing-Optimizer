@@ -78,7 +78,7 @@ def clearScreen():
     if os.name == 'nt':
         os.system('cls')
 
-        # for mac and linux(here, os.name is 'posix')
+    # for mac and linux(here, os.name is 'posix')
     else:
         os.system('clear')
 
@@ -152,6 +152,7 @@ def main():
     digitPattern = re.compile(r"(\d+|oops)(?=\s*)")
     savePattern = re.compile(r"(save)(?=\s*)")
     clearPattern = re.compile(r"(clear)(?=\s*)")
+    recallPattern = re.compile(r"(oh no)(?=\s*)")
     print("Loading Done")
     while running:
         try:
@@ -247,6 +248,12 @@ def main():
             if clearPattern.search(action.lower()):
                 clearScreen()
                 continue
+
+            if recallPattern.search(action.lower()):
+                oopsie = organ.recallRecent("local")
+                print(oopsie)
+                continue
+
         except Exception as e:
             print("Unexpected error:", repr(e))
             continue
