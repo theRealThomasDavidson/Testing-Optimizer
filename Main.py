@@ -199,8 +199,8 @@ def main():
             if resultsPattern.search(action.lower()):
                 print("#########################################")
                 for key in runningTests:
-                    #if runningTests[key]._status not in (1, 3):
-                        #continue
+                    if runningTests[key]._status not in (1, 3):
+                        continue
                     print("Use {} to link to\n{}\n#########################################".format(key, runningTests[key]))
                 temp = digitPattern.search(input("Use the link number to report result for that. Use 'oops' to go back: "))
                 while not temp:
@@ -251,8 +251,49 @@ def main():
 
             if recallPattern.search(action.lower()):
                 oopsie = organ.recallRecent("local")
-                print(oopsie)
+
+                print("#########################################")
+                for ndx in range(len(oopsie)):
+                    print("Use {} to link to\n{}\n#########################################".format(ndx, oopsie[ndx]))
+                temp = None
+                while not temp:
+                    temp = digitPattern.search(input("Use the link number to modify item. Use 'oops' to go back: "))
+                if temp.group(0) == "oops":
+                    continue
+                if int(temp.group(0)) >= len(oopsie):
+                    print("{} did not appear to be in the the modified bits.".format(int(temp.group(0))))
+                tocorrect = oopsie[int(temp.group(0))]
+                print("#######ITEM TO CHANGE########\n{}\n###############################".format(tocorrect))
+                assay = None
+                if isinstance(tocorrect, Objects.PatientID):
+                    assay = input("enter correct Assention Number (or just press enter if correct): ")
+                status = None
+                while not status:
+                    status = digitPattern.search(input("""From this set\n\t{0: "Awaiting Batch Testing",
+        1: "Awating Batch Results",
+        2: "Awaiting Individual Testing",
+        3: "Awaiting Individual Results",
+        4: "Negative Result",
+        5: "Positive Result"}\nEnter number for correct status or oops to go back or enter to skip:"""))
+                    if assay:
+                        break
+                if status:
+                    status = status.group(0)
+                    if status == "oops":
+                        continue
+                    status = int(status)
+                else:
+                    status = None
+                if status not in {0, 1, 2, 3, 4, 5, None}:
+                    print("This status doesn't work for me dawg.")
+                    continue
+                if not assay:
+                    assay = None
+
+                organ.modifyItem(tocorrect, correctStatus=status, correnctNumber=assay)
+
                 continue
+
 
         except Exception as e:
             print("Unexpected error:", repr(e))

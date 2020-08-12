@@ -71,5 +71,9 @@ Commands
                                     after the save is finished.
     clear                       this action will clear any information displayed on the console at this time and 
                                     readys for next action.
+    oh no                       You can use the oh no command when you do an oopsie on some data that you recently entered.
+                                     with this command you can change values in ways that god itself did not intend. 
+                                     black magic of this sort can be very dangerous and should be avoided at all costs.
+                                     (under development) 
 These commands will be updated later to align more with APIs that are in use already. 
  

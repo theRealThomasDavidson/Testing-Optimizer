@@ -300,7 +300,7 @@ class Hopper:
         items = []
         for _ in range(size):
             items.append(self._Q.get())
-        temp = Batch(items, self.retest)
+        temp = Batch(self.retest, items=items)
         self.batchTest.put(temp)
 
 
@@ -386,6 +386,8 @@ class Batch:
         if not isinstance(idNum, int):
             idNum = -342
         idNum += 1
+        if not items:
+            raise ValueError("No items were added to a new batch")
         self.num = hashlib.sha256((str(time()) + str(idNum)).encode() ).hexdigest()
         self.items = items
         self._status = None
@@ -461,10 +463,6 @@ class BatchStore:
             about batches that are awaiting results.
 
     methods
-    __init__(self): this is the initalizer and takes no arguments
-    getNextTest(self): this is the method for getting the next Batch for individual testing
-    put(self, items): this is a method for adding Batches to the batch testing queue either as Batch objects or
-            as a list or tuple of Batch objects
     results(self, id, result): this is a method for reporting results to a Batch that have been tested and allows the
             Batch to forward itself as is appropriate.
     """
@@ -804,10 +802,164 @@ class BatchTestingOrganizer:
         self._recent[client][-5:]
 
     def recallRecent(self, client):
-        for item in self._recent[client]:
-            print(item)
         return self._recent[client][:]
 
+    def modifyItem(self, item, correctStatus=None, correnctNumber=None):
+        """
+        this method will take an item from one part of the program and correct it's classification and move it to the
+        object that should have proper control of it.
+        :param item: this is an item  of type Batch or PatientID that is to be reclassified
+        :param correctStatus: this is and int corresponding to the status that that item should take according to the
+            below dictionary.
+           {0: "Awaiting Batch Testing",
+            1: "Awaiting Batch Results",
+            2: "Awaiting Individual Testing",
+            3: "Awaiting Individual Results",
+            4: "Negative Result",
+            5: "Positive Result"}
+        :param correctNumber: this is a string corresponding to a correction of the Assention number if it was entered
+            incorrectly
+        :return: this will return the modified item
+        """
+        ##HACK
+        #DO NOT USE THIS CODE AS A REFERENCE TO HOW THIS PROJECT IS TO BE WRITTEN THIS CODE SHOULD BE UNDER REVIEW UPON
+        #FIRST REFACTOR
+        #comments are pretty liberal here to allow for more readability,
+        if item._status is correctStatus:
+            return
+        if isinstance(item, Batch):
+            if correctStatus in {3, 5}:
+                raise ValueError("Batches cannot be modified to the value {}".format(
+                    IndividualStore._statusRead[correctStatus]))
+            oldStatus = item._status
+            item._status = correctStatus
+
+            for pat in item.items:
+                pat._status = correctStatus
+
+            if oldStatus is 0:
+                #each item is in the batchStore Queue Idk how this would be called
+                while not self.batchStore._Q.empty():
+                    temp = self.batchStore._Q.get()
+                    if temp._status == 2:
+                        self.batchStore._minorQ.put(temp)
+                while not self.batchStore._minorQ.empty():
+                    self.batchStore._Q.put(self.batchStore._minorQ.get())
+
+            if oldStatus is 1:
+                # batch is in batch store waiting area
+                self.batchStore._testing.pop(item.num)
+
+            if oldStatus is 2:
+                # each item is in the queue for individual store
+                while not self.individualStore._Q.empty():
+                    temp = self.individualStore._Q.get()
+                    if temp._status == 2:
+                        self.individualStore._minorQ.put(temp)
+                while not self.individualStore._minorQ.empty():
+                    self.individualStore._Q.put(self.individualStore._minorQ.get())
+
+            if oldStatus is 4:
+                #each item is popped off in negative result bit so we need to amend that area instead of
+                #  changing any internal data
+                pass
+
+            if correctStatus is 0:
+                self.batchStore._minorQ.put(item)
+
+            if correctStatus is 1:
+                self.batchStore._testing[item.num] = item
+
+            if correctStatus in {2, 4}:
+                item._status = 1
+                for pat in item.items:
+                    pat._status = 1
+                self.batchStore._testing[item.num] = item
+                self.batchStore.results(item.num, (correctStatus == 2))
+            return item
+
+        if isinstance(item, PatientID):
+            if correctStatus in {1, }:
+                raise ValueError("Batches cannot be modified to the value {}".format(
+                    IndividualStore._statusRead[correctStatus]))
+
+            if correnctNumber:
+                item.name = correnctNumber
+
+            if correctStatus is not None:
+                oldStatus = item._status
+                item._status = correctStatus
+                if oldStatus is 0:
+                    #could be in hopper or in batch
+                    tempQ = Queue()
+                    found = False
+                    while not self.hopper._Q.empty():
+                        temp = self.hopper._Q.get()
+                        if temp is not item:
+                            tempQ.put(temp)
+                        else:
+                            found = True
+                    while not tempQ.empty():
+                        self.hopper.put(tempQ.get(),fromSave=True)
+
+                    if not found:
+                        while not self.batchStore._Q.empty() or not self.batchStore._minorQ.empty():
+                            if not self.batchStore._minorQ.empty():
+                                temp = self.batchStore._minorQ.get()
+                            else:
+                                temp = self.batchStore._Q.get()
+                            for ndx in range(len(temp.items)):
+                                if item is temp.items[ndx]:
+                                    if not self.hopper._Q.empty():
+                                        print("2this happens\nlookat me\nthis is important")
+                                        temp.items[ndx] = self.hopper._Q.get()
+                                    else:
+                                        temp.items = temp.items[:ndx] + temp.items[ndx + 1:]
+                            tempQ.put(temp)
+                        while not tempQ.empty():
+                            self.batchStore._Q.put(tempQ.get())
+                if oldStatus is 1:
+                    #awating batch test results
+                    for key in self.batchStore._testing:
+                        for ndx in range(len(self.batchStore._testing[key].items)):
+                            if self.batchStore._testing[key].items[ndx] is item:
+                                self.batchStore._testing[key].items = self.batchStore._testing[key].items[:ndx] + \
+                                                        self.batchStore._testing[key].items[ndx + 1:]
+                                break
+
+                if oldStatus is 2:
+                    # one item in individual test queue
+                    while not self.individualStore._Q.empty():
+                        temp = self.individualStore._Q.get()
+                        if temp._status == 2:
+                            self.individualStore._minorQ.put(temp)
+                    while not self.individualStore._minorQ.empty():
+                        self.individualStore._Q.put(self.individualStore._minorQ.get())
+
+                if oldStatus is 3:
+                    #in the testing dictionary in individualstore
+                    self.individualStore._testing.pop(item.num)
+
+                if oldStatus in {4, 5}:
+                    # each item is popped off in negative or positive result bit so we need to amend that area
+                    #       instead of changing any internal data
+                    pass
+
+                if correctStatus is 0:
+                    self.hopper.put(item, fromSave=True)
+
+                if correctStatus is 2:
+                    self.individualStore._minorQ.put(item)
+
+                if correctStatus is 3:
+                    self.individualStore._testing[item.num] = item
+
+                if correctStatus in {4, 5}:
+                    item._status = 3
+                    self.individualStore._testing[item.num] = item
+                    self.individualStore.results(item.num, (correctStatus is 5))
+
+            return item
 
 
 def testing():
