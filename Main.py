@@ -73,6 +73,15 @@ def batchSizeOptimizer(prop):
     return a, bt(a)
 
 
+def clearScreen():
+    # for windows
+    if os.name == 'nt':
+        os.system('cls')
+
+        # for mac and linux(here, os.name is 'posix')
+    else:
+        os.system('clear')
+
 
 def main():
     """
@@ -142,6 +151,7 @@ def main():
     posNegPattern = re.compile(r"(\+|-)(?=\s*)")
     digitPattern = re.compile(r"(\d+|oops)(?=\s*)")
     savePattern = re.compile(r"(save)(?=\s*)")
+    clearPattern = re.compile(r"(clear)(?=\s*)")
     print("Loading Done")
     while running:
         try:
@@ -183,6 +193,7 @@ def main():
 
             if newCasePattern.search(action.lower()):
                 organ.newID(input("Enter new Accession Number: "))
+                continue
 
             if resultsPattern.search(action.lower()):
                 print("#########################################")
@@ -206,17 +217,24 @@ def main():
                         result = posNegPattern.search(a).group(0)
                 result = (result == "+")
                 organ.results(tested, result)
+                continue
 
             if nextTestPattern.search(action.lower()):
                 next = organ.getNextTest()
                 if next:
                     runningTests[runningTestNum] = next
                     runningTestNum += 1
+                continue
+
             if warrantyPattern.search(action.lower()):
                 print(warranty)
+                continue
+
             if copyrightPattern.search(action.lower()):
                 print("Tell 'em Thomas sent ya' and that he expect that ya'll won't keep him waitin' next time.\n"
                       "also any redistribution must contain the all copyright information.")
+                continue
+
             if savePattern.search(action.lower()):
                 #print("Saving program state...")
                 filename = ".\SavedStates\BatchOrganizer_Date_{}.json".format(datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
@@ -224,6 +242,11 @@ def main():
                 with open(filename, 'w+') as f:
                     json.dump(saved, f, indent=4)
                 print("Save successful in {}".format(filename))
+                continue
+
+            if clearPattern.search(action.lower()):
+                clearScreen()
+                continue
         except Exception as e:
             print("Unexpected error:", repr(e))
             continue

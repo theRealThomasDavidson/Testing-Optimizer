@@ -68,6 +68,8 @@ Commands
     get next                    this will print the next test in the queue it pioritises whichever has more tests of 
                                     batch or individual tests followed by batch tests over individual tests.
     save                        this feature will save all of the objects in the file and resuming running all threads 
-                                    after the save is finished. 
+                                    after the save is finished.
+    clear                       this action will clear any information displayed on the console at this time and 
+                                    readys for next action.
 These commands will be updated later to align more with APIs that are in use already. 
  
