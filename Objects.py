@@ -230,7 +230,7 @@ class Hopper:
         self.running = True
         if restore:
             for item in restore["items"]:
-                self.put(PatientID(restore=item))
+                self.put(PatientID(restore=item), fromSave=True)
 
     def shutdown(self):
         """
@@ -250,10 +250,12 @@ class Hopper:
             items.append(self._Q.get().save())
         return {"items": items}
 
-    def put(self, items):
+    def put(self, items, fromSave=False):
         """
         this method adds items to the scheduler to be handled in order
         :param items: is a PatientID type object or a tuple or list of PatientID objects
+        :param fromSave: this is a bool that will describe if this put is loading from a save state. and will not print
+            to console as if it was new.
         :return: None
         """
         if isinstance(items, PatientID):
@@ -261,13 +263,14 @@ class Hopper:
                 ValueError("Patient cannot be put into batch testing schedule with status:\n {}".format(
                     Hopper._statusRead[items._status]))
             self._Q.put(items)
-            print("############NEW PATIENT############")
-            print(items)
-            print("###################################")
+            if not fromSave:
+                print("############NEW PATIENT############")
+                print(items)
+                print("###################################")
             return
         if isinstance(items, (tuple, list)):
             for item in items:
-                self.put(item)
+                self.put(item, fromSave=fromSave)
             return
         raise TypeError("Only put individual PatientIDs into this Hopper object. The object added was of type: {}"\
                         .format(type(items)))
