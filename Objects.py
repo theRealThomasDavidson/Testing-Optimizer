@@ -43,12 +43,13 @@ def batchSizeOptimizer(prop):
     """
     if not isinstance(prop, float):
         raise TypeError
-    if 0 >= prop or prop >= 1:      #domain check: to be fair these should probably be
+    if 0 >= prop or prop >= 1:      # domain check: to be fair these should probably be
         raise ValueError("Math Domain Error: input should be between 0 and 1 used value was {}".format(prop))
 
-    batchtests = lambda P, N: (1/N) + (1 - (1 - P)**N)
+    def batchtests(p, n): return (1/n) + (1 - (1 - p)**n)
     low, mid, high = 1, 1, 2
-    bt = lambda x: batchtests(prop, x)
+
+    def bt(x): return  batchtests(prop, x)
 
     while bt(mid) > bt(high) and bt(high) < 1:
 
@@ -58,7 +59,7 @@ def batchSizeOptimizer(prop):
     if bt(mid) == 1.:
         return 1, 1.
 
-    l, m1, m2, h = low, int(low + ((high - low ) / 3)), int(low + (2*((high-low)/3))), high
+    l, m1, m2, h = low, int(low + ((high - low) / 3)), int(low + (2*((high-low)/3))), high
 
     while l + 5 < h:
         if bt(m1) > bt(m2):
@@ -67,7 +68,7 @@ def batchSizeOptimizer(prop):
             continue
         h = m2
         m1, m2 = int(l + ((h-l)/3)), int(l + (2*((h-l)/3)))
-    a = sorted(list(range(l,h+1)), key=bt)[0]
+    a = sorted(list(range(l, h+1)), key=bt)[0]
     if bt(a) >= 1.:
         return 1, 1.
     return a, bt(a)
@@ -82,15 +83,14 @@ class PatientID:
     8 characters for human readability
     :param self.name: a str or default None this is a string that I may use to store the assension number
         of the patient
-    resutls to them
-    :param status: an int default 0 will refer to the status according to this dictionary
+    :param self.status: an int default 0 will refer to the status according to this dictionary
     {0: "Awaiting Batch Testing",
     1: "Awating Batch Results",
     2: "Awaiting Individual Testing",
     3: "Awaiting Individual Results",
     4: "Negative Result",
     5: "Positive Result"}
-    :param cases: this is a pointer to the list that records resolved cases it is used to increment when results are
+    :param self.cases: this is a pointer to the list that records resolved cases it is used to increment when results are
     found
 
     methods
@@ -137,14 +137,14 @@ class PatientID:
         self._status = status
 
     def __str__(self):
-        return "Start of ID #: \t\t{}\nAccession Number: \t{}\nTesting status: \t{}".format(str(self.num)[:8], str(self.name),
-                                                                                    PatientID._statusRead[self._status])
+        return "Start of ID #: \t\t{}\nAccession Number: \t{}\nTesting status: \t{}".format(
+            str(self.num)[:8], str(self.name), PatientID._statusRead[self._status])
 
     def save(self):
         return {
-            "num": self.num,
-            "name":self.name,
-            "status": self._status
+            "num":      self.num,
+            "name":     self.name,
+            "status":   self._status
         }
 
     def restore(self, info):
@@ -190,8 +190,8 @@ class Hopper:
     self params
     :param self._Q: a queue.Queue that holds individuals to be added to a Batch
     :param self.running: a bool that acts as a flag to turn off the makeBatch threads when they are running
-    :param self.cases: a list of 2 ints where the first is the number of positive samples you have received in the past and
-        the second number is the total population of testing results
+    :param self.cases: a list of 2 ints where the first is the number of positive samples you have received in the past
+        and the second number is the total population of testing results
     :param self.feed: this is a semaphore to indicate when we sould check to see if batch testing is appropriate
     :param self.batchTest: this is the BatchStore object that we will pass our batches to
     :param self.retest: this is the IndividualStore object that we will be using for retesting PatientIDs that get
@@ -407,7 +407,7 @@ class Batch:
                     type(item)))
             if item._status == 4 or item._status == 5:
                 raise ValueError("Resolved case was passed to Batch")
-            if self._status == None:
+            if self._status is None:
                 self._status = item._status
             else:
                 if item._status != self._status:
@@ -543,37 +543,37 @@ class BatchStore:
             self._testing[a.num] = a
             return a
 
-    def results(self, id, result):
+    def results(self, bat, result):
         """
         This item handles when individuals receive test results. pushes further methods to handle the next steps in
         testing.
-        :param item: a str that holds the Batch number or it is a Batch object that results have been found for.
+        :param bat: a str that holds the Batch number or it is a Batch object that results have been found for.
         :param result: this is a bool that will be True when the results are positive and False when the results are
         negative.
         :return:
         """
-        if isinstance(id, Batch):
-            id = id.num
-        if not isinstance(id, str):
+        if isinstance(bat, Batch):
+            bat = bat.num
+        if not isinstance(bat, str):
             raise TypeError("The Identification used for results was not a recognized type.")
-        if id not in self._testing:
+        if bat not in self._testing:
             raise ValueError("The Identification used for results was not found in Batches waiting for results")
-        if not self._testing[id]:
+        if not self._testing[bat]:
             raise ValueError("This Batch seems to already have results.")
-        batch = self._testing.pop(id)
+        batch = self._testing.pop(bat)
         batch.updateStatus(4 - 2 * result)
         return batch
 
 
 class IndividualStore:
     """
-    this object will hold Patient ID#s from when they are assigned to be individually tested until they receive outcomes.
+    this object will hold Patient ID#s from when they are assigned to be individually tested until they receive outcomes
 
     self params:
-    :param _Q: this is a queue.Queue object that holds the main testing schedule
-    :param _minorQ: this is a queue.Queue objec that holds the testing schedule accidents so they are still at the
+    :param self._Q: this is a queue.Queue object that holds the main testing schedule
+    :param self._minorQ: this is a queue.Queue objec that holds the testing schedule accidents so they are still at the
             start of the schedule
-    :param _testing: this is a dictionary with str as keys that associate with the hex based ID numbers of
+    :param self._testing: this is a dictionary with str as keys that associate with the hex based ID numbers of
             PatientID objects. the values are the associated PatientID objects or None. this is used to hold information
             about patients that are awaiting results.
 
@@ -608,10 +608,10 @@ class IndividualStore:
             items.append(self._minorQ.get().save())
         for _ in range(self._Q.qsize()):
             items.append(self._Q.get().save())
-        testingStorage = {}
+        testing_storage = {}
         for item in self._testing:
-            testingStorage[item] = self._testing[item].save()
-        return {"items": items, "testing": testingStorage}
+            testing_storage[item] = self._testing[item].save()
+        return {"items": items, "testing": testing_storage}
 
     def getNextTest(self):
         """
@@ -653,24 +653,24 @@ class IndividualStore:
             return
         raise TypeError("only put individual PatientIDs into this IndividualStore object")
 
-    def results(self, id, result):
+    def results(self, pat, result):
         """
         This item handles when individuals receive test results. pushes further methods to handle the next steps in
         testing.
-        :param id: a str that holds the PatientID number or it is a PatientID object that results have been found for.
+        :param pat: a str that holds the PatientID number or it is a PatientID object that results have been found for.
         :param result: this is a bool that will be True when the results are positive and False when the results are
         negative.
         :return:
         """
-        if isinstance(id, PatientID):
-            id = id.num
-        if not isinstance(id, str):
+        if isinstance(pat, PatientID):
+            pat = pat.num
+        if not isinstance(pat, str):
             raise TypeError("The Identification used for results was not a recognized type.")
-        if id not in self._testing:
+        if pat not in self._testing:
             raise ValueError("The Identification used for results was not found in patients waiting for results")
-        if not self._testing[id]:
+        if not self._testing[pat]:
             raise ValueError("This Patient seems to already have results.")
-        patient = self._testing.pop(id)
+        patient = self._testing.pop(pat)
         patient.updateStatus(4 + result)
         return patient
 
@@ -697,7 +697,7 @@ class BatchTestingOrganizer:
             cases = restore["cases"]
         threading.Thread(target=self.hopper.makeBatch).start()
 
-    def newID(self, name, client="local"):
+    def new_id(self, name, client="local"):
         """
         this method adds a new PatientID to
         :param name: the name associated with the new Patient ID

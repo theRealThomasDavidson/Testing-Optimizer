@@ -137,32 +137,31 @@ def main():
 
 
                                                 #cases with positives first then totoal pop our null is 50/50
-                                                                        #and becomes negligable after we have a lot of samples
-    copyrightPattern = re.compile(r"(show c)\s*")
-    warrantyPattern = re.compile(r"(show w)\s*")
-    exitPattern = re.compile(r"(exit|quit)\s*")                         #exit command
-    propPattern = re.compile(r"(?<=prop:)\s*\d*\.\d+\s*")               #find batch size based on proportion
-    addPattern = re.compile(r"(?<=add pop:)\s*\d+\s+\d+\s*")            #add cases to population with positives first then negatives
-    newCasePattern = re.compile(r"(?<=add patient)\s*")                 #add cases to population with positives first then negatives
-    popPattern = re.compile(r"population\s*")
-    batchPattern = re.compile(r"batch size\s*")
-    resultsPattern = re.compile(r"(?<=test results)\s*")
-    nextTestPattern = re.compile(r"get next(?=\s*)")
-    posNegPattern = re.compile(r"(\+|-)(?=\s*)")
-    digitPattern = re.compile(r"(\d+|oops)(?=\s*)")
-    savePattern = re.compile(r"(save)(?=\s*)")
-    clearPattern = re.compile(r"(clear)(?=\s*)")
-    recallPattern = re.compile(r"(oh no)(?=\s*)")
-    commentPattern = re.compile(r"#")
+                                                                #and becomes negligable after we have a lot of samples
+    copyright_pattern = re.compile(r"(show c)\s*")
+    warranty_pattern = re.compile(r"(show w)\s*")
+    exit_pattern = re.compile(r"(exit|quit)\s*")                        # exit command
+    prop_pattern = re.compile(r"(?<=prop:)\s*\d*\.\d+\s*")              # find batch size based on proportion
+    add_pattern = re.compile(r"(?<=add pop:)\s*\d+\s+\d+\s*")           # add cases to population with positives first
+                                                                        # then negatives
+    new_case_pattern = re.compile(r"(?<=add patient)\s*")
+    pop_pattern = re.compile(r"population\s*")
+    batch_pattern = re.compile(r"batch size\s*")
+    results_pattern = re.compile(r"(?<=test results)\s*")
+    next_test_pattern = re.compile(r"get next(?=\s*)")
+    pos_neg_pattern = re.compile(r"([+-])(?=\s*)")
+    digit_pattern = re.compile(r"(\d+|oops)(?=\s*)")
+    save_pattern = re.compile(r"(save)(?=\s*)")
+    clear_pattern = re.compile(r"(clear)(?=\s*)")
+    recall_pattern = re.compile(r"(oh no)(?=\s*)")
+    comment_pattern = re.compile(r"#")
     print("Loading Done")
     while running:
         try:
             action = input("what action should we take? ")
-            #print(action)
-            if commentPattern.search(action.lower()):
+            if comment_pattern.search(action.lower()):
                 continue
-            if exitPattern.search(action.lower()):
-                #print("Shutting down program...")
+            if exit_pattern.search(action.lower()):
                 filename = ".\SavedStates\BatchOrganizer_Date_{}.json".format(datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
                 saved = organ.shutdown()
                 with open(filename, 'w+') as f:
@@ -171,43 +170,43 @@ def main():
                 running = False
                 break
 
-            if propPattern.search(action.lower()):
-                number = propPattern.search(action.lower()).group(0)
+            if prop_pattern.search(action.lower()):
+                number = prop_pattern.search(action.lower()).group(0)
                 number = float(number)
                 batchSizeOptimizer(number)      #just run for the print probably will fix this later
                 continue
 
-            if addPattern.search(action.lower()):
-                #print(addPattern.search(action.lower()))
-                numbers = addPattern.search(action.lower()).group(0)
+            if add_pattern.search(action.lower()):
+                #print(add_pattern.search(action.lower()))
+                numbers = add_pattern.search(action.lower()).group(0)
                 pos, neg = [int(x) for x in numbers.split()]
                 Objects.cases[0] += pos
                 Objects.cases[1] += neg + pos
                 batchSizeOptimizer((Objects.cases[0]/Objects.cases[1]))
                 continue
 
-            if popPattern.search(action.lower()):
+            if pop_pattern.search(action.lower()):
                 print("Positive cases: \t{}\nTotal tests:\t\t{}\nPositive percentage: \t{:.4f}%".format(
                     Objects.cases[0], Objects.cases[1], 100. * Objects.cases[0]/Objects.cases[1]))
                 continue
 
-            if batchPattern.search(action.lower()):
+            if batch_pattern.search(action.lower()):
                 batchSizeOptimizer((Objects.cases[0] / Objects.cases[1]))
                 continue
 
-            if newCasePattern.search(action.lower()):
-                organ.newID(input("Enter new Accession Number: "))
+            if new_case_pattern.search(action.lower()):
+                organ.new_id(input("Enter new Accession Number: "))
                 continue
 
-            if resultsPattern.search(action.lower()):
+            if results_pattern.search(action.lower()):
                 print("#########################################")
                 for key in runningTests:
                     if runningTests[key]._status not in (1, 3):
                         continue
                     print("Use {} to link to\n{}\n#########################################".format(key, runningTests[key]))
-                temp = digitPattern.search(input("Use the link number to report result for that. Use 'oops' to go back: "))
+                temp = digit_pattern.search(input("Use the link number to report result for that. Use 'oops' to go back: "))
                 while not temp:
-                    temp = digitPattern.search(
+                    temp = digit_pattern.search(
                         input("Use the link number to report result for that. Use 'oops' to go back: "))
                 if temp.group(0) == "oops":
                     continue
@@ -217,29 +216,29 @@ def main():
                 result = ""
                 while not result:
                     a = input("result (+ or -): ")
-                    if posNegPattern.search(a):
-                        result = posNegPattern.search(a).group(0)
+                    if pos_neg_pattern.search(a):
+                        result = pos_neg_pattern.search(a).group(0)
                 result = (result == "+")
                 organ.results(tested, result)
                 continue
 
-            if nextTestPattern.search(action.lower()):
+            if next_test_pattern.search(action.lower()):
                 next = organ.getNextTest()
                 if next:
                     runningTests[runningTestNum] = next
                     runningTestNum += 1
                 continue
 
-            if warrantyPattern.search(action.lower()):
+            if warranty_pattern.search(action.lower()):
                 print(warranty)
                 continue
 
-            if copyrightPattern.search(action.lower()):
+            if copyright_pattern.search(action.lower()):
                 print("Tell 'em Thomas sent ya' and that he expect that ya'll won't keep him waitin' next time.\n"
                       "also any redistribution must contain the all copyright information.")
                 continue
 
-            if savePattern.search(action.lower()):
+            if save_pattern.search(action.lower()):
                 #print("Saving program state...")
                 filename = ".\SavedStates\BatchOrganizer_Date_{}.json".format(datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
                 saved = organ.saveAndRun()
@@ -248,11 +247,11 @@ def main():
                 print("Save successful in {}".format(filename))
                 continue
 
-            if clearPattern.search(action.lower()):
+            if clear_pattern.search(action.lower()):
                 clearScreen()
                 continue
 
-            if recallPattern.search(action.lower()):
+            if recall_pattern.search(action.lower()):
                 oopsie = organ.recallRecent("local")
 
                 print("#########################################")
@@ -260,7 +259,7 @@ def main():
                     print("Use {} to link to\n{}\n#########################################".format(ndx, oopsie[ndx]))
                 temp = None
                 while not temp:
-                    temp = digitPattern.search(input("Use the link number to modify item. Use 'oops' to go back: "))
+                    temp = digit_pattern.search(input("Use the link number to modify item. Use 'oops' to go back: "))
                 if temp.group(0) == "oops":
                     continue
                 if int(temp.group(0)) >= len(oopsie):
@@ -272,7 +271,7 @@ def main():
                     assay = input("enter correct Assention Number (or just press enter if correct): ")
                 status = None
                 while not status:
-                    status = digitPattern.search(input("""From this set\n\t{0: "Awaiting Batch Testing",
+                    status = digit_pattern.search(input("""From this set\n\t{0: "Awaiting Batch Testing",
         1: "Awating Batch Results",
         2: "Awaiting Individual Testing",
         3: "Awaiting Individual Results",
