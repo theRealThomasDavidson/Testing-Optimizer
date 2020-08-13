@@ -78,9 +78,10 @@ class PatientID:
     this object is designed to be the way we interact with an individual's data and store it's current status of testing
 
     self params
-    :param num: a str this is a hashed identifier and is the most common ID to be used in methods display this as it's first
+    :param self.num: a str this is a hashed identifier and is the most common ID to be used in methods display this as it's first
     8 characters for human readability
-    :param name: a str or default None this is a string that I may use to store the name of the patient with any information needed to give \
+    :param self.name: a str or default None this is a string that I may use to store the assension number
+        of the patient
     resutls to them
     :param status: an int default 0 will refer to the status according to this dictionary
     {0: "Awaiting Batch Testing",
@@ -115,7 +116,7 @@ class PatientID:
     def __init__(self, accession_number=None, status=0, restore=None):
         """
         this method initializes the PatientID Object
-        :param name: expects a string and will only use None if no name is specified,
+        :param accession_number: expects a string and will only use None if no name is specified,
         :param status: an int default 0 will refer to the status according to this dictionary
         {0: "Awaiting Batch Testing",
         1: "Awating Batch Results",
@@ -188,12 +189,12 @@ class Hopper:
 
     self params
     :param self._Q: a queue.Queue that holds individuals to be added to a Batch
-    :param running: a bool that acts as a flag to turn off the makeBatch threads when they are running
-    :param cases: a list of 2 ints where the first is the number of positive samples you have received in the past and
+    :param self.running: a bool that acts as a flag to turn off the makeBatch threads when they are running
+    :param self.cases: a list of 2 ints where the first is the number of positive samples you have received in the past and
         the second number is the total population of testing results
-    :param feed: this is a semaphore to indicate when we sould check to see if batch testing is appropriate
-    :param batchTest: this is the BatchStore object that we will pass our batches to
-    :param retest: this is the IndividualStore object that we will be using for retesting PatientIDs that get
+    :param self.feed: this is a semaphore to indicate when we sould check to see if batch testing is appropriate
+    :param self.batchTest: this is the BatchStore object that we will pass our batches to
+    :param self.retest: this is the IndividualStore object that we will be using for retesting PatientIDs that get
         positive batch results
 
     methods
@@ -214,13 +215,12 @@ class Hopper:
     def __init__(self, feed, ready, batchTest, retest, restore=None):
         """
         this method initializes the class and identifies the objects it will send item to.
-        :param cases: a list of 2 ints where the first is the number of positive samples you have received in the past and
-            the second number is the total population of testing results
-        :param feed: this is a semaphore to indicate when we should check to see if batch testing is appropriate
+        :param feed: this is a semaphore that will direct the hopper to check to see if it can push out a new batch
         :param ready: this is a semaphore to indicate when we should save the objects.
         :param batchTest: this is the BatchStore object that we will pass our batches to
         :param retest: this is the IndividualStore object that we will be using for retesting PatientIDs that get
             positive batch results
+        :param restore: this is a dictionary that allows us to unserialize data for the hopper object
         """
         self.feed = feed
         self.saveReady = ready
@@ -241,8 +241,14 @@ class Hopper:
         self.feed.release()
 
     def restart(self):
+        """
+        this is used by the handler of this object to spin while the object itself is saving. used when you want to
+        restart this object after you have called shutdown.
+        :return:
+        """
         self.running = True
         self.saveReady.release()
+        threading.Thread(target=self.makeBatch).start()
 
     def save(self):
         items = []
@@ -272,7 +278,7 @@ class Hopper:
             for item in items:
                 self.put(item, fromSave=fromSave)
             return
-        raise TypeError("Only put individual PatientIDs into this Hopper object. The object added was of type: {}"\
+        raise TypeError("Only put individual PatientIDs into this Hopper object. The object added was of type: {}"
                         .format(type(items)))
 
     def lastBatch(self):
@@ -371,7 +377,7 @@ class Batch:
         :param items: a tuple with all elements of class PatientID these are the elements that are to be used together.
         """
         if not isinstance(retestQueue, IndividualStore):
-            raise TypeError("please use a object of type IndividualStore as retestQueue. used object is of type {}"\
+            raise TypeError("please use a object of type IndividualStore as retestQueue. used object is of type {}"
                             .format(type(retestQueue)))
         self._retest = retestQueue
         if restore:
@@ -455,10 +461,10 @@ class BatchStore:
     This object will hold batches while from when they are formed until they have outcomes.
 
     self params:
-    :param _Q: this is a queue.Queue object that holds the main testing schedule
-    :param _minorQ: this is a queue.Queue objec that holds the testing schedule accidents so they are still at the
+    :param self._Q: this is a queue.Queue object that holds the main testing schedule
+    :param self._minorQ: this is a queue.Queue objec that holds the testing schedule accidents so they are still at the
             start of the schedule
-    :param _testing: this is a dictionary with str as keys that associate with the hex based ID numbers of
+    :param self,_testing: this is a dictionary with str as keys that associate with the hex based ID numbers of
             Batch objects. the values are the associated Batch objects or None. this is used to hold information
             about batches that are awaiting results.
 
@@ -651,7 +657,7 @@ class IndividualStore:
         """
         This item handles when individuals receive test results. pushes further methods to handle the next steps in
         testing.
-        :param item: a str that holds the PatientID number or it is a PatientID object that results have been found for.
+        :param id: a str that holds the PatientID number or it is a PatientID object that results have been found for.
         :param result: this is a bool that will be True when the results are positive and False when the results are
         negative.
         :return:
@@ -695,6 +701,8 @@ class BatchTestingOrganizer:
         """
         this method adds a new PatientID to
         :param name: the name associated with the new Patient ID
+        :param client: a str that represents the name of the requesting party this should usually be a unique hash
+            generated by username or by time with hash
         :return:
         """
         patient = PatientID(name)
@@ -774,6 +782,7 @@ class BatchTestingOrganizer:
         :param item: a str that holds the PatientID number or it is a PatientID object that results have been found for.
         :param result: this is a bool that will be True when the results are positive and False when the results are
         negative.
+        :param client: this is a string of the hash of the client that is accessing this command
         :return:
         """
         if isinstance(id, PatientID):
@@ -821,10 +830,12 @@ class BatchTestingOrganizer:
             incorrectly
         :return: this will return the modified item
         """
-        ##HACK
-        #DO NOT USE THIS CODE AS A REFERENCE TO HOW THIS PROJECT IS TO BE WRITTEN THIS CODE SHOULD BE UNDER REVIEW UPON
-        #FIRST REFACTOR
-        #comments are pretty liberal here to allow for more readability,
+
+        # HACK
+        # DO NOT USE THIS CODE AS A REFERENCE TO HOW THIS PROJECT IS TO BE WRITTEN THIS CODE SHOULD BE UNDER REVIEW UPON
+        # FIRST REFACTOR
+        # comments are pretty liberal here to allow for more readability,
+
         if item._status is correctStatus:
             return
         if isinstance(item, Batch):

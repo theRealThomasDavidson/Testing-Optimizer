@@ -153,11 +153,14 @@ def main():
     savePattern = re.compile(r"(save)(?=\s*)")
     clearPattern = re.compile(r"(clear)(?=\s*)")
     recallPattern = re.compile(r"(oh no)(?=\s*)")
+    commentPattern = re.compile(r"#")
     print("Loading Done")
     while running:
         try:
             action = input("what action should we take? ")
             #print(action)
+            if commentPattern.search(action.lower()):
+                continue
             if exitPattern.search(action.lower()):
                 #print("Shutting down program...")
                 filename = ".\SavedStates\BatchOrganizer_Date_{}.json".format(datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
