@@ -281,6 +281,26 @@ class Hopper:
         raise TypeError("Only put individual PatientIDs into this Hopper object. The object added was of type: {}"
                         .format(type(items)))
 
+    def remove(self, item):
+        """
+        this is a method for removing items in the hopper it identifies if an item is removed so we know if it passed to
+        the batch store
+        :param item: this is a PatientID that is the item that should be removed.
+        :return: a bool that returns true if the item was removed and false if it was not.
+        """
+        tempQ = Queue()
+        found = False
+        while not self._Q.empty():
+            temp = self._Q.get()
+            if temp is not item:
+                tempQ.put(temp)
+            else:
+                found = True
+                break
+        while not tempQ.empty():
+            self.put(tempQ.get(), fromSave=True)
+        return found
+
     def lastBatch(self):
         """
         this will be a method run when all batches and individual tests are done so that we can clear any remaining
@@ -467,7 +487,8 @@ class BatchStore:
     :param self,_testing: this is a dictionary with str as keys that associate with the hex based ID numbers of
             Batch objects. the values are the associated Batch objects or None. this is used to hold information
             about batches that are awaiting results.
-
+    :param self._qlock: this is a blocking object to keep us from inputing objects into the queue when internal work is
+        being done on the queue
     methods
     results(self, id, result): this is a method for reporting results to a Batch that have been tested and allows the
             Batch to forward itself as is appropriate.
@@ -484,11 +505,14 @@ class BatchStore:
         self._Q = Queue()
         self._minorQ = Queue()
         self._testing = {}
+        self._qlock = threading.Lock()
         if restore:
             if not isinstance(retest, IndividualStore):
                 raise TypeError("Cannot restore Batch store without a Restesting queue")
             for item in restore["items"]:
+                self._qlock.acquire()
                 self._Q.put(Batch(retest, restore=item))
+                self._qlock.release()
             for item in restore["testing"]:
                 self._testing[item] = Batch(retest, restore=restore["testing"][item])
 
@@ -498,10 +522,10 @@ class BatchStore:
             items.append(self._minorQ.get().save())
         for _ in range(self._Q.qsize()):
             items.append(self._Q.get().save())
-        testingStorage = {}
+        testing_storage = {}
         for item in self._testing:
-            testingStorage[item] = self._testing[item].save()
-        return {"items": items, "testing": testingStorage}
+            testing_storage[item] = self._testing[item].save()
+        return {"items": items, "testing": testing_storage}
 
     def put(self, items):
         """
@@ -509,12 +533,16 @@ class BatchStore:
         :param items: is a Batch type object or a tuple or list of Batch objects
         :return: None
         """
+
         if isinstance(items, Batch):
-            if items._status not in (0,):
+            if items._status not in {0, }:
                 ValueError("Patient cannot be put into individual testing schedule with status:\n{}".format(
                     IndividualStore._statusRead[items._status]))
+            self._qlock.acquire()
             self._Q.put(items)
+            self._qlock.release()
             return
+
         if isinstance(items, (tuple, list)):
             for item in items:
                 self.put(item)
@@ -522,11 +550,28 @@ class BatchStore:
         raise TypeError("Only put Batch objects into this BatchStore object. Added object was of type:\n{}"
                         .format(type(items)))
 
+    def put_on_top(self, item):
+        """
+        this is for emergency use to put an item back into the queue when it was mistakenly pull early
+        :param item: this is the item to be put back into the queue
+        :return: None
+        """
+        if isinstance(item, Batch):
+            if item._status not in {0, }:
+                item._status = 0
+            self._qlock.acquire()
+            self._minorQ.put(item)
+            self._qlock.release()
+            return
+        raise TypeError("Only put Batch objects into this BatchStore object. Added object was of type: {}"
+                        .format(type(item)))
+
     def getNextTest(self):
         """
         this gets the next scheduled item from the queue
         :return: the next item from the scheduler, this item should be a Batch type object
         """
+        self._qlock.acquire()
         if self._minorQ.empty():
             a = self._Q.get()
         else:
@@ -537,11 +582,14 @@ class BatchStore:
         if res == "N" or res == "n":
             print("Sample:\n{}\nIs being added back into testing queue. ".format(a))
             self._minorQ.put(a)
+            self._qlock.release()
             return
         if res == "Y" or res == "y":
             a.updateStatus(1)
             self._testing[a.num] = a
+            self._qlock.release()
             return a
+        self._qlock.release()
 
     def results(self, bat, result):
         """
@@ -564,6 +612,46 @@ class BatchStore:
         batch.updateStatus(4 - 2 * result)
         return batch
 
+    def remove_q_items(self, items, hopper=None):
+        """
+        this method is intended to allow for an item to be pulled from the self._Q if it was put in accidentally
+        :param items: this is the items to be removed it should be either a PatientID object to be removed and if
+            possible replaced in it's batch or it is a Batch in which case it is simply removed fro the queue.
+        :param hopper: this is a Hopper object that can offer replacement PatientIDs in case one is removed from a batch.
+        :return: None
+        """
+        self._qlock.acquire()
+        if isinstance(items, Batch):
+            while not self._Q.empty():
+                temp = self._Q.get()
+                if temp is items:
+                    self._minorQ.put(temp)
+            while not self._minorQ.empty():
+                self._Q.put(self._minorQ.get())
+        if isinstance(items, PatientID):
+            tempQ = Queue()
+            while not self._Q.empty() or not self._minorQ.empty():
+                if not self._minorQ.empty():
+                    temp = self._minorQ.get()
+                else:
+                    temp = self._Q.get()
+                for ndx in range(len(temp.items)):
+                    if items is temp.items[ndx]:
+                        replace = False
+                        if hopper:
+                            if not hopper._Q.empty():
+                                temp.items[ndx] = hopper._Q.get()
+                                replace = True
+                        if not replace:
+                            temp.items = temp.items[:ndx] + temp.items[ndx + 1:]
+                tempQ.put(temp)
+            while not tempQ.empty():
+                self._Q.put(tempQ.get())
+
+        self._qlock.release()
+
+        return
+
 
 class IndividualStore:
     """
@@ -576,7 +664,8 @@ class IndividualStore:
     :param self._testing: this is a dictionary with str as keys that associate with the hex based ID numbers of
             PatientID objects. the values are the associated PatientID objects or None. this is used to hold information
             about patients that are awaiting results.
-
+    :param self._qlock: this is a blocking object to keep us from inputing objects into the queue when internal work is
+        being done on the queue
     methods
     __init__(self): this is the initalizer and takes no arguments
     getNextTest(self): this is the method for getting the next patientID for individual testing
@@ -596,6 +685,7 @@ class IndividualStore:
         self._Q = Queue()
         self._minorQ = Queue()
         self._testing = {}
+        self._qlock = threading.Lock()
         if restore:
             for item in restore["items"]:
                 self._Q.put(PatientID(restore=item))
@@ -653,6 +743,22 @@ class IndividualStore:
             return
         raise TypeError("only put individual PatientIDs into this IndividualStore object")
 
+    def put_on_top(self, item):
+        """
+        this is for emergency use to put an item back into the queue when it was mistakenly pull early
+        :param item: this is a PatientID object the item to be put back into the queue
+        :return: None
+        """
+        if isinstance(item, PatientID):
+            if item._status is not 2:
+                item._status = 2
+            self._qlock.acquire()
+            self._minorQ.put(item)
+            self._qlock.release()
+            return
+        raise TypeError("Only put PatientID objects into this IndividualStore object. Added object was of type: {}"
+                        .format(type(item)))
+
     def results(self, pat, result):
         """
         This item handles when individuals receive test results. pushes further methods to handle the next steps in
@@ -673,6 +779,29 @@ class IndividualStore:
         patient = self._testing.pop(pat)
         patient.updateStatus(4 + result)
         return patient
+
+    def remove_q_item(self, items):
+        """
+        this method is intended to allow for an item to be pulled from the self._Q if it was put in accidentally
+        :param items: this is the items to be removed it should be either a PatientID object or an iterable of PatientID
+                    objects, preferably sets. if this item does not match any items in the queue it will not remove
+                    any items.
+        :return: None
+        """
+        self._qlock.acquire()
+        temp = {True: lambda a, b: a is b,
+                False: lambda a, b: a in b}
+        cond = temp[isinstance(items, PatientID)]
+        while not self._Q.empty():
+            temp = self._Q.get()
+            if cond(temp, items):
+                self._minorQ.put(temp)
+        while not self._minorQ.empty():
+            self._Q.put(self._minorQ.get())
+
+        self._qlock.release()
+
+        return
 
 
 class BatchTestingOrganizer:
@@ -775,33 +904,34 @@ class BatchTestingOrganizer:
         self.putRecent(item, client)
         return item
 
-    def results(self, id, result, client="local"):
+    def results(self, item, result, client="local"):
         """
         This item handles when individuals receive test results. pushes further methods to handle the next steps in
         testing.
-        :param item: a str that holds the PatientID number or it is a PatientID object that results have been found for.
+        :param item: a str that holds the (PatientID/Batch) number or it is a (PatientID/Batch) object that results
+                have been found for.or a
         :param result: this is a bool that will be True when the results are positive and False when the results are
-        negative.
+                negative.
         :param client: this is a string of the hash of the client that is accessing this command
-        :return:
+        :return: None
         """
-        if isinstance(id, PatientID):
-            self.putRecent(id, client)
+        if isinstance(item, PatientID):
+            self.putRecent(item, client)
             self.individualStore.results(id, result)
             return
-        if isinstance(id, Batch):
-            self.putRecent(id, client)
+        if isinstance(item, Batch):
+            self.putRecent(item, client)
             self.batchStore.results(id, result)
             return
-        if not isinstance(id, str):
+        if not isinstance(item, str):
             raise TypeError("The Identification used for results was not a recognized type.")
         else:
             try:
-                item = self.batchStore.results(id, result)
-                self.putRecent(item, client)
+                temp = self.batchStore.results(item, result)
+                self.putRecent(temp, client)
             except ValueError:
-                item = self.individualStore.results(id, result)
-                self.putRecent(item, client)
+                temp = self.individualStore.results(item, result)
+                self.putRecent(temp, client)
             return
 
     def putRecent(self, item, client):
@@ -831,11 +961,7 @@ class BatchTestingOrganizer:
         :return: this will return the modified item
         """
 
-        # HACK
-        # DO NOT USE THIS CODE AS A REFERENCE TO HOW THIS PROJECT IS TO BE WRITTEN THIS CODE SHOULD BE UNDER REVIEW UPON
-        # FIRST REFACTOR
         # comments are pretty liberal here to allow for more readability,
-
         if item._status is correctStatus:
             return
         if isinstance(item, Batch):
@@ -849,13 +975,8 @@ class BatchTestingOrganizer:
                 pat._status = correctStatus
 
             if oldStatus is 0:
-                #each item is in the batchStore Queue Idk how this would be called
-                while not self.batchStore._Q.empty():
-                    temp = self.batchStore._Q.get()
-                    if temp._status == 2:
-                        self.batchStore._minorQ.put(temp)
-                while not self.batchStore._minorQ.empty():
-                    self.batchStore._Q.put(self.batchStore._minorQ.get())
+                # each item is in the batchStore Queue Idk how this would be called
+                self.batchStore.remove_q_item(item)
 
             if oldStatus is 1:
                 # batch is in batch store waiting area
@@ -863,20 +984,15 @@ class BatchTestingOrganizer:
 
             if oldStatus is 2:
                 # each item is in the queue for individual store
-                while not self.individualStore._Q.empty():
-                    temp = self.individualStore._Q.get()
-                    if temp._status == 2:
-                        self.individualStore._minorQ.put(temp)
-                while not self.individualStore._minorQ.empty():
-                    self.individualStore._Q.put(self.individualStore._minorQ.get())
+                self.individualStore.remove_q_items(set(item.items))
 
             if oldStatus is 4:
-                #each item is popped off in negative result bit so we need to amend that area instead of
+                # each item is popped off in negative result bit so we need to amend that area instead of
                 #  changing any internal data
                 pass
 
             if correctStatus is 0:
-                self.batchStore._minorQ.put(item)
+                self.batchStore.put_on_top(item)
 
             if correctStatus is 1:
                 self.batchStore._testing[item.num] = item
@@ -902,34 +1018,13 @@ class BatchTestingOrganizer:
                 item._status = correctStatus
                 if oldStatus is 0:
                     #could be in hopper or in batch
-                    tempQ = Queue()
-                    found = False
-                    while not self.hopper._Q.empty():
-                        temp = self.hopper._Q.get()
-                        if temp is not item:
-                            tempQ.put(temp)
-                        else:
-                            found = True
-                    while not tempQ.empty():
-                        self.hopper.put(tempQ.get(),fromSave=True)
-
-                    if not found:
-                        while not self.batchStore._Q.empty() or not self.batchStore._minorQ.empty():
-                            if not self.batchStore._minorQ.empty():
-                                temp = self.batchStore._minorQ.get()
-                            else:
-                                temp = self.batchStore._Q.get()
-                            for ndx in range(len(temp.items)):
-                                if item is temp.items[ndx]:
-                                    if not self.hopper._Q.empty():
-                                        print("2this happens\nlookat me\nthis is important")
-                                        temp.items[ndx] = self.hopper._Q.get()
-                                    else:
-                                        temp.items = temp.items[:ndx] + temp.items[ndx + 1:]
-                            tempQ.put(temp)
-                        while not tempQ.empty():
-                            self.batchStore._Q.put(tempQ.get())
+                    if not self.hopper.remove(item):
+                        self.batchStore.remove_q_items(item, hopper=self.hopper)
                 if oldStatus is 1:
+
+                    # HACK
+                    # DO NOT USE THIS CODE AS A REFERENCE TO HOW THIS PROJECT IS TO BE WRITTEN THIS CODE SHOULD BE UNDER REVIEW UPON
+                    # FIRST REFACTOR
                     #awating batch test results
                     for key in self.batchStore._testing:
                         for ndx in range(len(self.batchStore._testing[key].items)):
@@ -940,12 +1035,7 @@ class BatchTestingOrganizer:
 
                 if oldStatus is 2:
                     # one item in individual test queue
-                    while not self.individualStore._Q.empty():
-                        temp = self.individualStore._Q.get()
-                        if temp._status == 2:
-                            self.individualStore._minorQ.put(temp)
-                    while not self.individualStore._minorQ.empty():
-                        self.individualStore._Q.put(self.individualStore._minorQ.get())
+                    self.individualStore.remove_q_item(item)
 
                 if oldStatus is 3:
                     #in the testing dictionary in individualstore
