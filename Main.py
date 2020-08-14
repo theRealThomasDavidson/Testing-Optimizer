@@ -1,6 +1,5 @@
 import re
 import Objects
-import pickle
 from datetime import datetime
 import os
 import json
@@ -200,19 +199,23 @@ def main():
 
             if results_pattern.search(action.lower()):
                 print("#########################################")
-                for key in runningTests:
-                    if runningTests[key]._status not in (1, 3):
-                        continue
-                    print("Use {} to link to\n{}\n#########################################".format(key, runningTests[key]))
-                temp = digit_pattern.search(input("Use the link number to report result for that. Use 'oops' to go back: "))
+                waiting_list = organ.waiting_on_results()
+                for ndx in range(len(waiting_list)):
+                    print("Use {} to link to\n{}\n#########################################".format(
+                        ndx, waiting_list[ndx]))
+                temp = None
                 while not temp:
                     temp = digit_pattern.search(
                         input("Use the link number to report result for that. Use 'oops' to go back: "))
                 if temp.group(0) == "oops":
                     continue
-                if int(temp.group(0)) not in runningTests:
+                temp = int(temp.group(0))
+                if temp >= len(waiting_list):
                     print("{} did not appear to be in the the active tests.".format(int(temp.group(0))))
-                tested = runningTests.pop(int(temp.group(0)))
+                    continue
+
+                tested = waiting_list[temp]
+                print(tested)
                 result = ""
                 while not result:
                     a = input("result (+ or -): ")
@@ -223,10 +226,7 @@ def main():
                 continue
 
             if next_test_pattern.search(action.lower()):
-                next = organ.getNextTest()
-                if next:
-                    runningTests[runningTestNum] = next
-                    runningTestNum += 1
+                next = organ.get_next_test()
                 continue
 
             if warranty_pattern.search(action.lower()):
@@ -241,7 +241,7 @@ def main():
             if save_pattern.search(action.lower()):
                 #print("Saving program state...")
                 filename = ".\SavedStates\BatchOrganizer_Date_{}.json".format(datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
-                saved = organ.saveAndRun()
+                saved = organ.save_n_run()
                 with open(filename, 'w+') as f:
                     json.dump(saved, f, indent=4)
                 print("Save successful in {}".format(filename))
@@ -252,7 +252,7 @@ def main():
                 continue
 
             if recall_pattern.search(action.lower()):
-                oopsie = organ.recallRecent("local")
+                oopsie = organ.recall_recent("local")
 
                 print("#########################################")
                 for ndx in range(len(oopsie)):
@@ -292,7 +292,7 @@ def main():
                 if not assay:
                     assay = None
 
-                organ.modifyItem(tocorrect, correctStatus=status, correnctNumber=assay)
+                organ.modify_item(tocorrect, correct_status=status, correct_number=assay)
 
                 continue
 

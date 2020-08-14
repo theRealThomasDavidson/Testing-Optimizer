@@ -11,3 +11,7 @@ __pycache__
 #ignore setup py2exe thing.
 
 setup.py
+__init__.py
+
+#ignore project files
+.idea

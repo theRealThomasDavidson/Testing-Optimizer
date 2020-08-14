@@ -2,7 +2,7 @@ import hashlib
 from time import time
 from queue import Queue
 import threading
-import json
+# import json
 warranty = """
     This is the Batch Testing Organizer. it hopes to remove some of the logistical headaches of batch virus testing
     Copyright (C) 2020  Thomas Davidson (davidson.thomasj@gmail.com)
@@ -30,7 +30,7 @@ idNum = 0
 cases = [1, 2]
 
 
-def batchSizeOptimizer(prop):
+def batch_size_optimizer(prop):
     """
     this function will return the most optimal batch size for covid tests given a particular proportion of the tests
     that come up as positives currently this only accounts for true positives.
@@ -49,7 +49,7 @@ def batchSizeOptimizer(prop):
     def batchtests(p, n): return (1/n) + (1 - (1 - p)**n)
     low, mid, high = 1, 1, 2
 
-    def bt(x): return  batchtests(prop, x)
+    def bt(x): return batchtests(prop, x)
 
     while bt(mid) > bt(high) and bt(high) < 1:
 
@@ -59,16 +59,16 @@ def batchSizeOptimizer(prop):
     if bt(mid) == 1.:
         return 1, 1.
 
-    l, m1, m2, h = low, int(low + ((high - low) / 3)), int(low + (2*((high-low)/3))), high
+    low, m1, m2, h = low, int(low + ((high - low) / 3)), int(low + (2*((high-low)/3))), high
 
-    while l + 5 < h:
+    while low + 5 < h:
         if bt(m1) > bt(m2):
-            l = m1
-            m1, m2 = int(l + ((h-l)/3)), int(l + (2*((h-l)/3)))
+            low = m1
+            m1, m2 = int(low + ((h-low)/3)), int(low + (2*((h-low)/3)))
             continue
         h = m2
-        m1, m2 = int(l + ((h-l)/3)), int(l + (2*((h-l)/3)))
-    a = sorted(list(range(l, h+1)), key=bt)[0]
+        m1, m2 = int(low + ((h-low)/3)), int(low + (2*((h-low)/3)))
+    a = sorted(list(range(low, h+1)), key=bt)[0]
     if bt(a) >= 1.:
         return 1, 1.
     return a, bt(a)
@@ -79,8 +79,8 @@ class PatientID:
     this object is designed to be the way we interact with an individual's data and store it's current status of testing
 
     self params
-    :param self.num: a str this is a hashed identifier and is the most common ID to be used in methods display this as it's first
-    8 characters for human readability
+    :param self.num: a str this is a hashed identifier and is the most common ID to be used in methods display this as
+    it's first 8 characters for human readability
     :param self.name: a str or default None this is a string that I may use to store the assension number
         of the patient
     :param self.status: an int default 0 will refer to the status according to this dictionary
@@ -90,13 +90,13 @@ class PatientID:
     3: "Awaiting Individual Results",
     4: "Negative Result",
     5: "Positive Result"}
-    :param self.cases: this is a pointer to the list that records resolved cases it is used to increment when results are
-    found
+    :param self.cases: this is a pointer to the list that records resolved cases it is used to increment when results
+    are found
 
     methods
     def __init__(self, name=None, status=0)
     def __ str__ ()
-    def updateStatus(self, newStatus)
+    def updateStatus(self, new_status)
     ##TODO: add method in updateStatus to report results once the patient has received a result (4 or 5)
     """
     i = 1
@@ -132,7 +132,7 @@ class PatientID:
         if restore:
             self.restore(restore)
             return
-        self.num = hashlib.sha256( (str(time()) + str(idNum)).encode() ).hexdigest()
+        self.num = hashlib.sha256((str(time()) + str(idNum)).encode()).hexdigest()
         self.name = accession_number
         self._status = status
 
@@ -152,10 +152,10 @@ class PatientID:
         self.name = info["name"]
         self._status = info["status"]
 
-    def updateStatus(self, newStatus):
+    def update_status(self, new_status):
         """
         this method modifies the internal status of a PatientID to the new Status
-        :param newStatus: an int that will refer to the status according to this dictionary
+        :param new_status: an int that will refer to the status according to this dictionary
         {0: "Awaiting Batch Testing",
         1: "Awating Batch Results",
         2: "Awaiting Individual Testing",
@@ -165,14 +165,14 @@ class PatientID:
         :return:
         """
         if self._status not in PatientID._statusProgress:
-            if self._status == newStatus:
+            if self._status is new_status:
                 return
             raise ValueError("This patient has already received an outcome. This was: {}".format(
                 PatientID._statusRead[self._status]))
-        if newStatus not in PatientID._statusProgress[self._status]:
+        if new_status not in PatientID._statusProgress[self._status]:
             raise ValueError("This patient is at the stage: {} and cannot move directly to {}".format(
-                PatientID._statusRead[self._status], PatientID._statusRead[newStatus]))
-        self._status = newStatus
+                PatientID._statusRead[self._status], PatientID._statusRead[new_status]))
+        self._status = new_status
         if self._status == 4 or self._status == 5:
             global cases
             cases[1] += 1
@@ -189,11 +189,11 @@ class Hopper:
 
     self params
     :param self._Q: a queue.Queue that holds individuals to be added to a Batch
-    :param self.running: a bool that acts as a flag to turn off the makeBatch threads when they are running
+    :param self.running: a bool that acts as a flag to turn off the make_batch threads when they are running
     :param self.cases: a list of 2 ints where the first is the number of positive samples you have received in the past
         and the second number is the total population of testing results
     :param self.feed: this is a semaphore to indicate when we sould check to see if batch testing is appropriate
-    :param self.batchTest: this is the BatchStore object that we will pass our batches to
+    :param self.batch_test: this is the BatchStore object that we will pass our batches to
     :param self.retest: this is the IndividualStore object that we will be using for retesting PatientIDs that get
         positive batch results
 
@@ -202,7 +202,7 @@ class Hopper:
         this
     def shutdown(self):
     def put(self, items):
-    def def makeBatch(self, feed, batchTest, retest):
+    def make_batch(self, feed, batch_test, retest):
     """
     _statusRead = {0: "Awaiting Batch Testing",
                    1: "Awating Batch Results",
@@ -212,29 +212,29 @@ class Hopper:
                    5: "Positive Result"
                    }
 
-    def __init__(self, feed, ready, batchTest, retest, restore=None):
+    def __init__(self, feed, ready, batch_test, retest, restore=None):
         """
         this method initializes the class and identifies the objects it will send item to.
         :param feed: this is a semaphore that will direct the hopper to check to see if it can push out a new batch
         :param ready: this is a semaphore to indicate when we should save the objects.
-        :param batchTest: this is the BatchStore object that we will pass our batches to
+        :param batch_test: this is the BatchStore object that we will pass our batches to
         :param retest: this is the IndividualStore object that we will be using for retesting PatientIDs that get
             positive batch results
         :param restore: this is a dictionary that allows us to unserialize data for the hopper object
         """
         self.feed = feed
         self.saveReady = ready
-        self.batchTest = batchTest
+        self.batch_test = batch_test
         self.retest = retest
         self._Q = Queue()
         self.running = True
         if restore:
             for item in restore["items"]:
-                self.put(PatientID(restore=item), fromSave=True)
+                self.put(PatientID(restore=item), from_save=True)
 
     def shutdown(self):
         """
-        this shuts down the makeBatch command
+        this shuts down the make_batch command
         :return:
         """
         self.running = False
@@ -248,7 +248,7 @@ class Hopper:
         """
         self.running = True
         self.saveReady.release()
-        threading.Thread(target=self.makeBatch).start()
+        threading.Thread(target=self.make_batch).start()
 
     def save(self):
         items = []
@@ -256,11 +256,11 @@ class Hopper:
             items.append(self._Q.get().save())
         return {"items": items}
 
-    def put(self, items, fromSave=False):
+    def put(self, items, from_save=False):
         """
         this method adds items to the scheduler to be handled in order
         :param items: is a PatientID type object or a tuple or list of PatientID objects
-        :param fromSave: this is a bool that will describe if this put is loading from a save state. and will not print
+        :param from_save: this is a bool that will describe if this put is loading from a save state. and will not print
             to console as if it was new.
         :return: None
         """
@@ -269,17 +269,26 @@ class Hopper:
                 ValueError("Patient cannot be put into batch testing schedule with status:\n {}".format(
                     Hopper._statusRead[items._status]))
             self._Q.put(items)
-            if not fromSave:
+            if not from_save:
                 print("############NEW PATIENT############")
                 print(items)
                 print("###################################")
             return
         if isinstance(items, (tuple, list)):
             for item in items:
-                self.put(item, fromSave=fromSave)
+                self.put(item, from_save=from_save)
             return
         raise TypeError("Only put individual PatientIDs into this Hopper object. The object added was of type: {}"
                         .format(type(items)))
+    
+    def get(self):
+        """
+        this will return the next item in the hopper queue. 
+        :return: either the next patient ID or a None if the hopper is empty
+        """
+        if self._Q.empty():
+            return None
+        return self._Q.get()
 
     def remove(self, item):
         """
@@ -288,20 +297,20 @@ class Hopper:
         :param item: this is a PatientID that is the item that should be removed.
         :return: a bool that returns true if the item was removed and false if it was not.
         """
-        tempQ = Queue()
+        tempq = Queue()
         found = False
         while not self._Q.empty():
             temp = self._Q.get()
             if temp is not item:
-                tempQ.put(temp)
+                tempq.put(temp)
             else:
                 found = True
                 break
-        while not tempQ.empty():
-            self.put(tempQ.get(), fromSave=True)
+        while not tempq.empty():
+            self.put(tempq.get(), from_save=True)
         return found
 
-    def lastBatch(self):
+    def last_batch(self):
         """
         this will be a method run when all batches and individual tests are done so that we can clear any remaining
         patients
@@ -309,29 +318,27 @@ class Hopper:
         """
         size = self._Q.qsize()
         global cases
-        bsize = batchSizeOptimizer(cases[0]/cases[1])[0]
+        bsize = batch_size_optimizer(cases[0]/cases[1])[0]
         for _ in range(size//bsize):
             items = []
             for __ in range(bsize):
                 items.append(self._Q.get())
             temp = Batch(items, self.retest)
-            self.batchTest.put(temp)
+            self.batch_test.put(temp)
         if self._Q.empty():
             return
         size = self._Q.qsize()
         if size == 1:
             item = self._Q.get()
-            item.updateStatus(2)
+            item.update_status(2)
             self.retest.put(item)
         items = []
         for _ in range(size):
             items.append(self._Q.get())
         temp = Batch(self.retest, items=items)
-        self.batchTest.put(temp)
+        self.batch_test.put(temp)
 
-
-
-    def makeBatch(self):
+    def make_batch(self):
         """
         this will be a method run with it's own thread that will automatically add items to the
         :return:
@@ -339,14 +346,14 @@ class Hopper:
         while self.running:
             size = self._Q.qsize()
             global cases
-            bsize = batchSizeOptimizer(cases[0]/cases[1])[0]
+            bsize = batch_size_optimizer(cases[0]/cases[1])[0]
             for _ in range(size//bsize):
                 items = []
                 for __ in range(bsize):
                     items.append(self._Q.get())
                 if len(items) > 1:
                     temp = Batch(self.retest, items=items)
-                    self.batchTest.put(temp)
+                    self.batch_test.put(temp)
                 elif len(items) == 1:
                     self.retest.put(items[0])
             self.feed.acquire()
@@ -359,9 +366,9 @@ class Batch:
     received a batch testing result.
 
     self params:
-    :param  self.items: a tuple with all elements of class PatientID these are the elements that are to be used together.
-    :param self._status: this is a int that describes the status of all of the patients in the batch it is associated with
-    the dict
+    :param  self.items: a tuple with all elements of class PatientID these are the elements that are to be used together
+    :param self._status: this is a int that describes the status of all of the patients in the batch it is associated 
+    with the dict
     {   0: "Awaiting Batch Testing",
         1: "Awating Batch Results",
         2: "Awaiting Individual Testing",
@@ -372,10 +379,10 @@ class Batch:
     :param self._retest: object of type IndividualStore that we pass our items for resting to.
 
     methods
-    __init__(self, items, retestQueue): this is the initializer and takes a tuple of PatientIDs as the items argument
-    and makes a batch with these IDs and an IndividualStore as the RetestQueue.
-    updateStatus(self, newStatus): this is the recommended method for changing status of the batch and the
-        Patient IDs in the batch newStatus is an int associated with the new status.
+    __init__(self, items, retest_queue): this is the initializer and takes a tuple of PatientIDs as the items argument
+    and makes a batch with these IDs and an IndividualStore as the retest_queue.
+    update_status(self, new_status): this is the recommended method for changing status of the batch and the
+        Patient IDs in the batch new_status is an int associated with the new status.
 
     """
     _statusProgress = {0: (0, 1, 2),
@@ -391,15 +398,15 @@ class Batch:
                    5: "Positive Result"
                    }
 
-    def __init__(self, retestQueue, items=None, restore=None):
+    def __init__(self, retest_queue, items=None, restore=None):
         """
         this initializes the batch and inputs all the items.
         :param items: a tuple with all elements of class PatientID these are the elements that are to be used together.
         """
-        if not isinstance(retestQueue, IndividualStore):
-            raise TypeError("please use a object of type IndividualStore as retestQueue. used object is of type {}"
-                            .format(type(retestQueue)))
-        self._retest = retestQueue
+        if not isinstance(retest_queue, IndividualStore):
+            raise TypeError("please use a object of type IndividualStore as retest_queue. used object is of type {}"
+                            .format(type(retest_queue)))
+        self._retest = retest_queue
         if restore:
             self.num = restore["num"]
             self._status = restore["status"]
@@ -414,7 +421,7 @@ class Batch:
         idNum += 1
         if not items:
             raise ValueError("No items were added to a new batch")
-        self.num = hashlib.sha256((str(time()) + str(idNum)).encode() ).hexdigest()
+        self.num = hashlib.sha256((str(time()) + str(idNum)).encode()).hexdigest()
         self.items = items
         self._status = None
 
@@ -451,10 +458,10 @@ class Batch:
             "items": items
         }
 
-    def updateStatus(self, newStatus):
+    def update_status(self, new_status):
         """
         this method modifies the internal status of a PatientID to the new Status
-        :param newStatus: an int that will refer to the status according to this dictionary
+        :param new_status: an int that will refer to the status according to this dictionary
         {0: "Awaiting Batch Testing",
         1: "Awating Batch Results",
         2: "Awaiting Individual Testing",
@@ -466,13 +473,13 @@ class Batch:
         if self._status not in Batch._statusProgress:
             raise ValueError("This patient has Already received an outcome. This was: {}".format(
                 Batch._statusRead[self._status]))
-        if newStatus not in Batch._statusProgress[self._status]:
+        if new_status not in Batch._statusProgress[self._status]:
             raise ValueError("This Patient is at the stage: {} and cannot move directly to {}".format(
-                Batch._statusRead[self._status], Batch._statusRead[newStatus]))
-        self._status = newStatus
+                Batch._statusRead[self._status], Batch._statusRead[new_status]))
+        self._status = new_status
         for item in self.items:
-            item.updateStatus(newStatus)
-        if newStatus == 2:              #moving on to individual testing
+            item.update_status(new_status)
+        if new_status is 2:              # moving on to individual testing
             self._retest.put(self.items)
 
 
@@ -501,7 +508,7 @@ class BatchStore:
                    5: "Positive Result"
                    }
 
-    def __init__(self, restore=None,retest=None):
+    def __init__(self, restore=None, retest=None):
         self._Q = Queue()
         self._minorQ = Queue()
         self._testing = {}
@@ -515,7 +522,14 @@ class BatchStore:
                 self._qlock.release()
             for item in restore["testing"]:
                 self._testing[item] = Batch(retest, restore=restore["testing"][item])
-
+    
+    def size(self):
+        """
+        this is used to probe how many items are total in the queues
+        :return: an int that represents how many items we have in the queue to be tested. 
+        """
+        return self._minorQ.qsize() + self._Q.qsize()
+        
     def save(self):
         items = []
         for _ in range(self._minorQ.qsize()):
@@ -566,12 +580,14 @@ class BatchStore:
         raise TypeError("Only put Batch objects into this BatchStore object. Added object was of type: {}"
                         .format(type(item)))
 
-    def getNextTest(self):
+    def get_next_test(self):
         """
         this gets the next scheduled item from the queue
         :return: the next item from the scheduler, this item should be a Batch type object
         """
+        print("this runs")
         self._qlock.acquire()
+        print("this doesn't run")
         if self._minorQ.empty():
             a = self._Q.get()
         else:
@@ -585,7 +601,7 @@ class BatchStore:
             self._qlock.release()
             return
         if res == "Y" or res == "y":
-            a.updateStatus(1)
+            a.update_status(1)
             self._testing[a.num] = a
             self._qlock.release()
             return a
@@ -600,6 +616,7 @@ class BatchStore:
         negative.
         :return:
         """
+        print(bat)
         if isinstance(bat, Batch):
             bat = bat.num
         if not isinstance(bat, str):
@@ -609,7 +626,7 @@ class BatchStore:
         if not self._testing[bat]:
             raise ValueError("This Batch seems to already have results.")
         batch = self._testing.pop(bat)
-        batch.updateStatus(4 - 2 * result)
+        batch.update_status(4 - 2 * result)
         return batch
 
     def remove_q_items(self, items, hopper=None):
@@ -617,7 +634,7 @@ class BatchStore:
         this method is intended to allow for an item to be pulled from the self._Q if it was put in accidentally
         :param items: this is the items to be removed it should be either a PatientID object to be removed and if
             possible replaced in it's batch or it is a Batch in which case it is simply removed fro the queue.
-        :param hopper: this is a Hopper object that can offer replacement PatientIDs in case one is removed from a batch.
+        :param hopper: this is a Hopper object that can offer replacement PatientIDs in case one is removed from a batch
         :return: None
         """
         self._qlock.acquire()
@@ -629,7 +646,7 @@ class BatchStore:
             while not self._minorQ.empty():
                 self._Q.put(self._minorQ.get())
         if isinstance(items, PatientID):
-            tempQ = Queue()
+            tempq = Queue()
             while not self._Q.empty() or not self._minorQ.empty():
                 if not self._minorQ.empty():
                     temp = self._minorQ.get()
@@ -637,20 +654,24 @@ class BatchStore:
                     temp = self._Q.get()
                 for ndx in range(len(temp.items)):
                     if items is temp.items[ndx]:
-                        replace = False
                         if hopper:
-                            if not hopper._Q.empty():
-                                temp.items[ndx] = hopper._Q.get()
-                                replace = True
-                        if not replace:
+                            temp = hopper.get()
+                        if not temp:
                             temp.items = temp.items[:ndx] + temp.items[ndx + 1:]
-                tempQ.put(temp)
-            while not tempQ.empty():
-                self._Q.put(tempQ.get())
+                tempq.put(temp)
+            while not tempq.empty():
+                self._Q.put(tempq.get())
 
         self._qlock.release()
 
         return
+
+    def waiting_on_results(self):
+        """
+        this will return all the objects that are currently waiting on results
+        :return: a list of all objects that we are waiting for results on
+        """
+        return [self._testing[x] for x in self._testing]
 
 
 class IndividualStore:
@@ -668,7 +689,7 @@ class IndividualStore:
         being done on the queue
     methods
     __init__(self): this is the initalizer and takes no arguments
-    getNextTest(self): this is the method for getting the next patientID for individual testing
+    get_next_test(self): this is the method for getting the next patientID for individual testing
     put(self, items): this is a method for adding patients to the individual testing queue either as patient objects or
             as a list or tuple of patient objects
     results(self, id, result): this is a method for reporting results to individuals that have been individually tested.
@@ -703,7 +724,7 @@ class IndividualStore:
             testing_storage[item] = self._testing[item].save()
         return {"items": items, "testing": testing_storage}
 
-    def getNextTest(self):
+    def get_next_test(self):
         """
         this gets the next scheduled item from the queue
         :return: the next item from the scheduler, this item should be a PatientID type object
@@ -720,7 +741,7 @@ class IndividualStore:
             self._minorQ.put(a)
             return
         if res == "Y" or res == "y":
-            a.updateStatus(3)
+            a.update_status(3)
             self._testing[a.num] = a
             return a
 
@@ -734,7 +755,7 @@ class IndividualStore:
             if items._status not in (0, 1, 2):
                 ValueError("Patient cannot be put into individual testing schedule with status:\n {}".format(
                     IndividualStore._statusRead[items._status]))
-            items.updateStatus(2)
+            items.update_status(2)
             self._Q.put(items)
             return
         if isinstance(items, (tuple, list)):
@@ -742,6 +763,13 @@ class IndividualStore:
                 self.put(item)
             return
         raise TypeError("only put individual PatientIDs into this IndividualStore object")
+    
+    def size(self):
+        """
+        this is used to probe how many items are total in the queues
+        :return: an int that represents how many items we have in the queue to be tested. 
+        """
+        return self._minorQ.qsize() + self._Q.qsize()
 
     def put_on_top(self, item):
         """
@@ -777,7 +805,7 @@ class IndividualStore:
         if not self._testing[pat]:
             raise ValueError("This Patient seems to already have results.")
         patient = self._testing.pop(pat)
-        patient.updateStatus(4 + result)
+        patient.update_status(4 + result)
         return patient
 
     def remove_q_item(self, items):
@@ -803,6 +831,13 @@ class IndividualStore:
 
         return
 
+    def waiting_on_results(self):
+        """
+        this will return all the objects that are currently waiting on results
+        :return: a list of all objects that we are waiting for results on
+        """
+        return [self._testing[x] for x in self._testing]
+
 
 class BatchTestingOrganizer:
     def __init__(self, restore=None):
@@ -821,10 +856,11 @@ class BatchTestingOrganizer:
         else:
             self.individualStore = IndividualStore(restore=restore["Istore"])
             self.batchStore = BatchStore(restore=restore["Bstore"], retest=self.individualStore)
-            self.hopper = Hopper(self.hopperFeed, self.saveReady, self.batchStore, self.individualStore, restore=restore["hopper"])
+            self.hopper = Hopper(self.hopperFeed, self.saveReady, self.batchStore, self.individualStore,
+                                 restore=restore["hopper"])
             global cases
             cases = restore["cases"]
-        threading.Thread(target=self.hopper.makeBatch).start()
+        threading.Thread(target=self.hopper.make_batch).start()
 
     def new_id(self, name, client="local"):
         """
@@ -837,23 +873,23 @@ class BatchTestingOrganizer:
         patient = PatientID(name)
         self.hopper.put(patient)
         self.hopperFeed.release()
-        self.putRecent(patient, client=client)
+        self.put_recent(patient, client=client)
 
     def save(self):
         return{
-            "cases" : cases,
+            "cases": cases,
             "hopper": self.hopper.save(),
             "Istore": self.individualStore.save(),
             "Bstore": self.batchStore.save()
         }
 
-    def saveAndRun(self):
+    def save_n_run(self):
         """
         this funtion should save the project while keeping the objects running.
         :return: a save object
         """
         print("Saving...")
-        self.hopper.shutdown()      #shutd downt he makeBatch thread
+        self.hopper.shutdown()      # shutdown the make_batch thread
         self.saveReady.acquire()
         state = self.save()
         self.hopper.restart()
@@ -863,7 +899,7 @@ class BatchTestingOrganizer:
         for item in state["Bstore"]["items"]:
             self.batchStore.put(Batch(self.individualStore, restore=item))
         for item in state["hopper"]["items"]:
-            self.hopper.put(PatientID(restore=item), fromSave=True)
+            self.hopper.put(PatientID(restore=item), from_save=True)
         return state
 
     def shutdown(self):
@@ -874,35 +910,39 @@ class BatchTestingOrganizer:
         :return:
         """
         print("Saving and Shutting down...")
-        self.hopper.shutdown()      #shutd downt he makeBatch thread
+        self.hopper.shutdown()      # shutdown the make_batch thread
         self.running = False
         self.saveReady.acquire()
         return self.save()
 
-    def getNextTest(self, client="local"):
+    def get_next_test(self, client="local"):
         """
         this method will return the next test to be put forward
         :param client: a str that represents the name of the requesting party this should usually be a unique hash
             generated by username or by time with hash
         :return: a Batch or PatientID associated with the next Test to be preformed
         """
-        iSize = self.individualStore._Q.qsize() + self.individualStore._minorQ.qsize()
-        bSize = self.batchStore._Q.qsize() + self.batchStore._minorQ.qsize()
-        if iSize + bSize == 0:
-            self.hopper.lastBatch()
-            iSize = self.individualStore._Q.qsize() + self.individualStore._minorQ.qsize()
-            bSize = self.batchStore._Q.qsize() + self.batchStore._minorQ.qsize()
-            if iSize + bSize == 0:
+        
+        if self.individualStore.size() + self.batchStore.size() == 0:
+            self.hopper.last_batch()
+            if self.individualStore.size() + self.batchStore.size() == 0:
                 print("All samples are being tested.")
                 return None
 
-        if bSize >= iSize:
-            item = self.batchStore.getNextTest()
+        if self.batchStore.size() >= self.individualStore.size():
+            item = self.batchStore.get_next_test()
 
         else:
-            item = self.individualStore.getNextTest()
-        self.putRecent(item, client)
+            item = self.individualStore.get_next_test()
+        self.put_recent(item, client)
         return item
+
+    def waiting_on_results(self):
+        """
+        this will return all the objects that are currently waiting on results
+        :return: a list of all objects that we are waiting for results on
+        """
+        return self.batchStore.waiting_on_results() + self.individualStore.waiting_on_results()
 
     def results(self, item, result, client="local"):
         """
@@ -916,39 +956,39 @@ class BatchTestingOrganizer:
         :return: None
         """
         if isinstance(item, PatientID):
-            self.putRecent(item, client)
-            self.individualStore.results(id, result)
+            self.put_recent(item, client)
+            self.individualStore.results(item, result)
             return
         if isinstance(item, Batch):
-            self.putRecent(item, client)
-            self.batchStore.results(id, result)
+            self.put_recent(item, client)
+            self.batchStore.results(item, result)
             return
         if not isinstance(item, str):
             raise TypeError("The Identification used for results was not a recognized type.")
         else:
             try:
                 temp = self.batchStore.results(item, result)
-                self.putRecent(temp, client)
+                self.put_recent(temp, client)
             except ValueError:
                 temp = self.individualStore.results(item, result)
-                self.putRecent(temp, client)
+                self.put_recent(temp, client)
             return
 
-    def putRecent(self, item, client):
+    def put_recent(self, item, client):
         if client not in self._recent:
             self._recent[client] = []
         self._recent[client].append(item)
-        self._recent[client][-5:]
+        # TODO self._recent[client] = self._recent[client][-5:]
 
-    def recallRecent(self, client):
+    def recall_recent(self, client):
         return self._recent[client][:]
 
-    def modifyItem(self, item, correctStatus=None, correnctNumber=None):
+    def modify_item(self, item, correct_status=None, correct_number=None):
         """
         this method will take an item from one part of the program and correct it's classification and move it to the
         object that should have proper control of it.
         :param item: this is an item  of type Batch or PatientID that is to be reclassified
-        :param correctStatus: this is and int corresponding to the status that that item should take according to the
+        :param correct_status: this is and int corresponding to the status that that item should take according to the
             below dictionary.
            {0: "Awaiting Batch Testing",
             1: "Awaiting Batch Results",
@@ -956,76 +996,76 @@ class BatchTestingOrganizer:
             3: "Awaiting Individual Results",
             4: "Negative Result",
             5: "Positive Result"}
-        :param correctNumber: this is a string corresponding to a correction of the Assention number if it was entered
+        :param correct_number: this is a string corresponding to a correction of the assay number if it was entered
             incorrectly
         :return: this will return the modified item
         """
 
         # comments are pretty liberal here to allow for more readability,
-        if item._status is correctStatus:
+        if item._status is correct_status:
             return
         if isinstance(item, Batch):
-            if correctStatus in {3, 5}:
+            if correct_status in {3, 5}:
                 raise ValueError("Batches cannot be modified to the value {}".format(
-                    IndividualStore._statusRead[correctStatus]))
-            oldStatus = item._status
-            item._status = correctStatus
+                    IndividualStore._statusRead[correct_status]))
+            old_status = item._status
+            item._status = correct_status
 
             for pat in item.items:
-                pat._status = correctStatus
+                pat._status = correct_status
 
-            if oldStatus is 0:
+            if old_status is 0:
                 # each item is in the batchStore Queue Idk how this would be called
-                self.batchStore.remove_q_item(item)
+                self.batchStore.remove_q_items(item)
 
-            if oldStatus is 1:
+            if old_status is 1:
                 # batch is in batch store waiting area
                 self.batchStore._testing.pop(item.num)
 
-            if oldStatus is 2:
+            if old_status is 2:
                 # each item is in the queue for individual store
-                self.individualStore.remove_q_items(set(item.items))
+                self.individualStore.remove_q_item(set(item.items))
 
-            if oldStatus is 4:
+            if old_status is 4:
                 # each item is popped off in negative result bit so we need to amend that area instead of
                 #  changing any internal data
                 pass
 
-            if correctStatus is 0:
+            if correct_status is 0:
                 self.batchStore.put_on_top(item)
 
-            if correctStatus is 1:
+            if correct_status is 1:
                 self.batchStore._testing[item.num] = item
 
-            if correctStatus in {2, 4}:
+            if correct_status in {2, 4}:
                 item._status = 1
                 for pat in item.items:
                     pat._status = 1
                 self.batchStore._testing[item.num] = item
-                self.batchStore.results(item.num, (correctStatus == 2))
+                self.batchStore.results(item.num, (correct_status == 2))
             return item
 
         if isinstance(item, PatientID):
-            if correctStatus in {1, }:
+            if correct_status in {1, }:
                 raise ValueError("Batches cannot be modified to the value {}".format(
-                    IndividualStore._statusRead[correctStatus]))
+                    IndividualStore._statusRead[correct_status]))
 
-            if correnctNumber:
-                item.name = correnctNumber
+            if correct_number:
+                item.name = correct_number
 
-            if correctStatus is not None:
-                oldStatus = item._status
-                item._status = correctStatus
-                if oldStatus is 0:
-                    #could be in hopper or in batch
+            if correct_status is not None:
+                old_status = item._status
+                item._status = correct_status
+                if old_status is 0:
+                    # could be in hopper or in batch
                     if not self.hopper.remove(item):
                         self.batchStore.remove_q_items(item, hopper=self.hopper)
-                if oldStatus is 1:
+                if old_status is 1:
 
                     # HACK
-                    # DO NOT USE THIS CODE AS A REFERENCE TO HOW THIS PROJECT IS TO BE WRITTEN THIS CODE SHOULD BE UNDER REVIEW UPON
-                    # FIRST REFACTOR
-                    #awating batch test results
+                    # DO NOT USE THIS CODE AS A REFERENCE TO HOW THIS PROJECT IS TO BE WRITTEN THIS CODE SHOULD BE UNDER
+                    # REVIEW UPON FIRST REFACTOR
+                    # awating batch test results
                     for key in self.batchStore._testing:
                         for ndx in range(len(self.batchStore._testing[key].items)):
                             if self.batchStore._testing[key].items[ndx] is item:
@@ -1033,148 +1073,39 @@ class BatchTestingOrganizer:
                                                         self.batchStore._testing[key].items[ndx + 1:]
                                 break
 
-                if oldStatus is 2:
+                if old_status is 2:
                     # one item in individual test queue
                     self.individualStore.remove_q_item(item)
 
-                if oldStatus is 3:
-                    #in the testing dictionary in individualstore
+                if old_status is 3:
+                    # in the testing dictionary in individualstore
                     self.individualStore._testing.pop(item.num)
 
-                if oldStatus in {4, 5}:
+                if old_status in {4, 5}:
                     # each item is popped off in negative or positive result bit so we need to amend that area
                     #       instead of changing any internal data
                     pass
 
-                if correctStatus is 0:
-                    self.hopper.put(item, fromSave=True)
+                if correct_status is 0:
+                    self.hopper.put(item, from_save=True)
 
-                if correctStatus is 2:
+                if correct_status is 2:
                     self.individualStore._minorQ.put(item)
 
-                if correctStatus is 3:
+                if correct_status is 3:
                     self.individualStore._testing[item.num] = item
 
-                if correctStatus in {4, 5}:
+                if correct_status in {4, 5}:
                     item._status = 3
                     self.individualStore._testing[item.num] = item
-                    self.individualStore.results(item.num, (correctStatus is 5))
+                    self.individualStore.results(item.num, (correct_status is 5))
 
             return item
 
 
 def testing():
-    print(copyr)
-    print("this environment is meant for testing and is not expected to have compatibility with the"
-          " show c and show w commands. running main will allow for these functions.")
-    global cases
-    organ = BatchTestingOrganizer()
-    cases = [40, 390]
-    names = [
-        "alice",
-        "bob",
-        "carol",
-        "dennis",
-        "eloise",
-        "franklin",
-        "greg",
-        "hannah",
-        "irene",
-        "james",
-        "kim",
-        "louis",
-        "mary",
-        "nicole",
-        "ogden",
-        "pearl",
-        "quinton",
-        "rachael",
-        "steven",
-        "tanya",
-        "urkel",
-        "vince",
-        "will",
-        "xander",
-        "yolanda",
-        "zander"
-    ]
-    for name in names:
-        print("add patient\n{}".format(name))
-    organ.shutdown()
     return
-    print("size of the queue is :", organ.batchStore._Q.qsize())
-    ID1 = organ.getNextTest()
-    ID1 = ID1.num
-    ID2 = organ.getNextTest()
-    ID2 = ID2.num
-    ID3 = organ.getNextTest()
-
-    print("cases before any results:", cases)
-    organ.batchStore.results(ID1, False)
-    print("cases after negative batch:", cases)
-    organ.batchStore.results(ID2, True)
-    print("cases after positive batch:", cases)
-    print("Individual queue after positive:", organ.individualStore._Q.qsize())
-
-    ID4 = organ.getNextTest()
-    ID5 = organ.getNextTest()
-    ID6 = organ.getNextTest()
-
-    print(ID1)
-    print(ID2)
-    print(ID3)
-    print(ID4)
-    print(ID5)
-    print(ID6)
-
-    print("size of individual queue after 1 pop is :", organ.batchStore._Q.qsize())
 
 
-    organ.shutdown()
-
-
-    """
-    a, b, c, d, e = PatientID(), PatientID(), PatientID(), PatientID(), PatientID()
-    store = IndividualStore()
-    print(a)
-    bat = Batch((a, b, c, d, e), store)
-    print(bat)
-    bat.updateStatus(1)
-    print(bat)
-    print(a)
-    bat.updateStatus(2)
-
-    aNum = a.num
-    dNum = d.num
-    print("######################################\n")
-
-    store.getNextTest()
-    store.getNextTest()
-    store.getNextTest()
-    store.getNextTest()
-    store.getNextTest()
-    print(store._testing)
-    print("######################################\n")
-    print(a, "\n")
-    print(b, "\n")
-    print(c, "\n")
-    print(d, "\n")
-    print(e, "\n")
-    print("######################################\n")
-    store.results(aNum, False)
-    print("results for negative: \n", a)
-    store.results(b, True)
-    print("results for positive: \n", b)
-    print("\n######################################\n")
-    print(store._testing)
-    store.results(d, False)
-    print(d)
-
-    print(store._testing)"""
-
-
-
-
-
-if  __name__ == "__main__":
+if __name__ == "__main__":
     testing()
